@@ -1,4 +1,4 @@
-.PHONY: up down logs build test status
+.PHONY: up down logs build test status init-db
 
 up:
 	docker compose up -d
@@ -19,3 +19,6 @@ test:
 
 status:
 	@bash scripts/health-check.sh
+
+init-db:
+	@bash scripts/init-db.sh

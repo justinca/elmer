@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
     # Connect to PostgreSQL (non-fatal if unavailable).
     await db.connect()
 
-    # Start MQTT listener in a background task.
+    # Start MQTT client, heartbeat, and stale-node checker in background.
     mqtt_stop = asyncio.Event()
     mqtt_task = asyncio.create_task(mqtt_service.run(mqtt_stop))
 
@@ -45,13 +45,11 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Elmer Core shutting down...")
 
-    # Signal MQTT loop to stop and publish offline status.
+    # Signal MQTT loop to stop (run() handles offline publish + cleanup).
     mqtt_stop.set()
-    await mqtt_service.publish("elmer/core/status", "offline")
 
-    # Wait for the MQTT task to finish cleanly.
     try:
-        await asyncio.wait_for(mqtt_task, timeout=5.0)
+        await asyncio.wait_for(mqtt_task, timeout=10.0)
     except asyncio.TimeoutError:
         mqtt_task.cancel()
 

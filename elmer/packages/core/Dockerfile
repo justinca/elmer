@@ -2,10 +2,16 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies for both common and core.
+COPY packages/common/requirements.txt /tmp/common-requirements.txt
+COPY packages/core/requirements.txt /tmp/core-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/common-requirements.txt -r /tmp/core-requirements.txt
 
-COPY src/ ./src/
+# Copy shared common package and core source.
+COPY packages/common/ /app/packages/common/
+COPY packages/core/src/ /app/src/
+
+ENV PYTHONPATH=/app/packages
 
 EXPOSE 8100
 

@@ -1,8 +1,11 @@
 services:
+  # PostgreSQL runs natively on the NUC (not in Docker).
+  # Connection settings are in .env — see POSTGRES_* variables.
+
   core:
     build:
-      context: ./packages/core
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: packages/core/Dockerfile
     ports:
       - "${ELMER_CORE_PORT:-8100}:8100"
     env_file:

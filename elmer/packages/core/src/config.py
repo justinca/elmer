@@ -15,15 +15,17 @@ class Settings(BaseSettings):
     ELMER_WORKER_PORT: int = 8101
 
     # PostgreSQL
-    POSTGRES_HOST: str = "localhost"
+    POSTGRES_HOST: str = "127.0.0.1"
     POSTGRES_PORT: int = 5432
-    POSTGRES_USER: str = "elmer"
-    POSTGRES_PASSWORD: str = "changeme"
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = "elmer"
 
     # MQTT
     MQTT_HOST: str = "localhost"
     MQTT_PORT: int = 1883
+    MQTT_USER: str = ""
+    MQTT_PASSWORD: str = ""
 
     # Ollama (LLM)
     OLLAMA_HOST: str = "localhost"
