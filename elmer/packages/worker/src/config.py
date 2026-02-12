@@ -1,4 +1,4 @@
-"""Elmer Worker — Configuration."""
+"""Elmer Worker — Configuration via environment variables."""
 
 from pydantic_settings import BaseSettings
 
@@ -6,18 +6,29 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Worker settings loaded from environment variables."""
 
-    ELMER_WORKER_HOST: str = "0.0.0.0"
-    ELMER_WORKER_PORT: int = 8101
+    # Worker
+    WORKER_PORT: int = 8101
 
+    # Ollama (local LLM) — prefixed to avoid collision with Ollama's own OLLAMA_HOST
+    ELMER_OLLAMA_HOST: str = "localhost"
+    ELMER_OLLAMA_PORT: int = 11434
+
+    # MQTT (broker on the NUC)
     MQTT_HOST: str = "localhost"
     MQTT_PORT: int = 1883
     MQTT_USER: str = ""
     MQTT_PASSWORD: str = ""
 
-    OLLAMA_HOST: str = "localhost"
-    OLLAMA_PORT: int = 11434
+    # Whisper transcription
+    WHISPER_MODEL: str = "medium.en"
+    WHISPER_DEVICE: str = "cuda"
 
+    # Obsidian vault path on this Windows machine
     OBSIDIAN_VAULT_PATH: str = ""
+
+    @property
+    def ollama_base_url(self) -> str:
+        return f"http://{self.ELMER_OLLAMA_HOST}:{self.ELMER_OLLAMA_PORT}"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

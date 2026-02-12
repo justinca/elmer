@@ -1,102 +1,88 @@
-"""Whisper transcription endpoints using faster-whisper with CUDA."""
+"""Whisper transcription endpoints.
+
+Accepts audio file uploads or local file paths and returns structured
+transcription results using faster-whisper (CTranslate2 backend).
+"""
 
 import logging
-import tempfile
-import time
 from pathlib import Path
 
-from fastapi import APIRouter, File, UploadFile, HTTPException, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File
+from pydantic import BaseModel
+
+from ..services import gpu_monitor, whisper_service
 
 logger = logging.getLogger("elmer.worker.transcribe")
 router = APIRouter()
 
-# Lazy-load the model to avoid slow startup and GPU memory usage until needed.
-_model = None
-_model_name = "base"
+
+class FilePathRequest(BaseModel):
+    """Request body for transcribing a file already on disk."""
+    path: str
 
 
-def _get_model(model_size: str = "base"):
-    """Load the faster-whisper model on first use."""
-    global _model, _model_name
-    if _model is not None and _model_name == model_size:
-        return _model
+@router.post("")
+async def transcribe_upload(file: UploadFile = File(...)):
+    """Transcribe an uploaded audio file.
 
-    from faster_whisper import WhisperModel
+    Accepts multipart file upload. Supported formats: wav, mp3, m4a, flac, ogg.
 
-    logger.info("Loading faster-whisper model '%s' with CUDA...", model_size)
-    start = time.time()
-    _model = WhisperModel(model_size, device="cuda", compute_type="float16")
-    _model_name = model_size
-    logger.info("Model loaded in %.1fs", time.time() - start)
-    return _model
-
-
-@router.post("/audio")
-async def transcribe_audio(
-    file: UploadFile = File(...),
-    language: str = Query(default=None, description="Language code (e.g. 'en'). Auto-detect if omitted."),
-    model: str = Query(default="base", description="Whisper model size"),
-):
-    """Transcribe an uploaded audio file using faster-whisper.
-
-    Returns the full transcript, timed segments, detected language, and duration.
-    Supports: wav, mp3, m4a, flac, ogg, webm.
+    Returns transcription with text, segments, language, and duration.
     """
-    # Save uploaded file to a temp location (faster-whisper needs a file path).
-    suffix = Path(file.filename).suffix if file.filename else ".wav"
-    try:
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp_path = tmp.name
-            while chunk := await file.read(1024 * 1024):  # 1 MB chunks
-                tmp.write(chunk)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Failed to read upload: {exc}")
+    filename = file.filename or "audio.wav"
+    suffix = Path(filename).suffix.lower()
 
-    try:
-        whisper_model = _get_model(model)
-
-        logger.info("Transcribing %s (%s)...", file.filename, suffix)
-        start = time.time()
-
-        kwargs = {"beam_size": 5, "vad_filter": True}
-        if language:
-            kwargs["language"] = language
-
-        segments_iter, info = whisper_model.transcribe(tmp_path, **kwargs)
-
-        # Collect all segments.
-        segments = []
-        full_text_parts = []
-        for seg in segments_iter:
-            segments.append({
-                "start": round(seg.start, 3),
-                "end": round(seg.end, 3),
-                "text": seg.text.strip(),
-            })
-            full_text_parts.append(seg.text.strip())
-
-        elapsed = time.time() - start
-        full_text = " ".join(full_text_parts)
-
-        logger.info(
-            "Transcription complete: %.1fs audio in %.1fs (%.1fx realtime), %d segments",
-            info.duration, elapsed, info.duration / max(elapsed, 0.1), len(segments),
+    if suffix not in whisper_service.SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported audio format '{suffix}'. Supported: {', '.join(whisper_service.SUPPORTED_EXTENSIONS)}",
         )
 
-        return {
-            "status": "success",
-            "filename": file.filename,
-            "transcript": full_text,
-            "segments": segments,
-            "language": info.language,
-            "language_probability": round(info.language_probability, 3),
-            "duration_seconds": round(info.duration, 2),
-            "processing_seconds": round(elapsed, 2),
-            "model": model,
-        }
+    audio_bytes = await file.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Empty audio file")
 
-    except Exception as exc:
-        logger.exception("Transcription failed for %s", file.filename)
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}")
-    finally:
-        Path(tmp_path).unlink(missing_ok=True)
+    logger.info("Transcribe upload: %s (%d bytes)", filename, len(audio_bytes))
+    result = whisper_service.transcribe_bytes(audio_bytes, suffix=suffix)
+    return result
+
+
+@router.post("/file")
+async def transcribe_file(req: FilePathRequest):
+    """Transcribe a file already present on this Windows machine.
+
+    Accepts a local file path. Useful for files transferred via network
+    share or already sitting on disk.
+    """
+    file_path = Path(req.path)
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {req.path}")
+    if not file_path.is_file():
+        raise HTTPException(status_code=400, detail=f"Not a file: {req.path}")
+    if file_path.suffix.lower() not in whisper_service.SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported format '{file_path.suffix}'. Supported: {', '.join(whisper_service.SUPPORTED_EXTENSIONS)}",
+        )
+
+    logger.info("Transcribe file: %s", file_path)
+    result = whisper_service.transcribe(file_path)
+    return result
+
+
+@router.get("/status")
+async def transcribe_status():
+    """Check whether the Whisper model is loaded and GPU memory available."""
+    gpu = gpu_monitor.get_gpu_stats()
+
+    return {
+        "model_loaded": whisper_service.is_loaded(),
+        "whisper_model": whisper_service.settings.WHISPER_MODEL,
+        "whisper_device": whisper_service.settings.WHISPER_DEVICE,
+        "gpu": {
+            "available": gpu.available,
+            "memory_free_mb": gpu.memory_total_mb - gpu.memory_used_mb if gpu.available else 0,
+            "memory_total_mb": gpu.memory_total_mb,
+        },
+    }
