@@ -15,8 +15,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from common.src.mqtt import ElmerMQTTClient
-from common.src.heartbeat import HeartbeatManager
+from elmer_common.mqtt import ElmerMQTTClient
+from elmer_common.heartbeat import HeartbeatManager
 
 from ..config import settings
 from ..db import connection as db
@@ -65,9 +65,12 @@ HEARTBEAT_INTERVAL = 30
 # How often to run the staleness checker (seconds).
 STALE_CHECK_INTERVAL = 30
 
-# Shared client + heartbeat manager set during lifespan.
+# Shared client + heartbeat manager + node monitor set during lifespan.
 _mqtt: ElmerMQTTClient | None = None
 _heartbeat: HeartbeatManager | None = None
+
+# NodeMonitor — created during run(), exposed for routes.
+_node_monitor: Any = None
 
 
 def _seed_registry() -> None:
@@ -88,6 +91,7 @@ async def _on_heartbeat(topic: str, payload: dict) -> None:
     node_id = parts[1]
     now = datetime.now(timezone.utc)
 
+    # Update the legacy in-memory registry (for backward compat).
     if node_id in node_registry:
         node_registry[node_id]["status"] = payload.get("status", "online")
         node_registry[node_id]["last_seen"] = now
@@ -102,20 +106,32 @@ async def _on_heartbeat(topic: str, payload: dict) -> None:
             "last_seen": now,
             "metadata": payload.get("details", {}),
         }
+        # New node detected — regenerate docs so inventory stays current.
+        from .autodoc import get_documentor
+        documentor = get_documentor()
+        if documentor is not None:
+            asyncio.create_task(documentor.generate_all())
 
     logger.debug("Heartbeat from %s: %s", node_id, payload.get("status"))
 
-    # Persist to elmer.events (best-effort, don't block on DB errors).
-    await _persist_event(node_id, "heartbeat", payload)
+    # Forward to NodeMonitor (handles persistence + staleness tracking).
+    if _node_monitor is not None:
+        await _node_monitor.on_heartbeat(node_id, payload)
+    else:
+        # Fallback: persist directly if monitor not yet initialised.
+        await _persist_event(node_id, "heartbeat", payload)
 
 
-async def _on_status(topic: str, payload: dict) -> None:
+async def _on_status(topic: str, payload: dict | str) -> None:
     """Process ``elmer/+/status`` messages."""
     parts = topic.split("/")
     if len(parts) < 3:
         return
     node_id = parts[1]
     now = datetime.now(timezone.utc)
+
+    if isinstance(payload, str):
+        payload = {"status": payload}
 
     # Status messages may be plain strings wrapped in {"_raw": "online"}.
     status = payload.get("status") or payload.get("_raw", "unknown")
@@ -179,10 +195,20 @@ async def _check_stale_nodes(stop_event: asyncio.Event) -> None:
         except asyncio.TimeoutError:
             pass
 
+        # Delegate to NodeMonitor if available.
+        if _node_monitor is not None:
+            await _node_monitor.check_stale_nodes()
+            # Sync any unreachable status back into the legacy registry.
+            for node in _node_monitor.get_all_nodes():
+                if node.name in node_registry:
+                    node_registry[node.name]["status"] = node.status
+            continue
+
+        # Fallback: original registry-based check.
         now = datetime.now(timezone.utc)
         for node_id, info in node_registry.items():
             if node_id == "core":
-                continue  # don't mark ourselves
+                continue
             last = info.get("last_seen")
             if last is None:
                 continue
@@ -197,7 +223,6 @@ async def _check_stale_nodes(stop_event: asyncio.Event) -> None:
                 await _persist_event(
                     "core", "node_unreachable", {"node": node_id, "last_seen": str(last)},
                 )
-                # Publish event on MQTT as well.
                 if _mqtt is not None:
                     await _mqtt.publish_event("core", "node_unreachable", {"node": node_id})
 
@@ -212,13 +237,24 @@ async def publish(topic: str, payload: Any) -> None:
         await _mqtt.publish(topic, payload)
 
 
+def get_node_monitor():
+    """Return the NodeMonitor instance (may be ``None`` before run())."""
+    return _node_monitor
+
+
 async def run(stop_event: asyncio.Event) -> None:
     """Start the MQTT client, heartbeat manager, and stale-node checker.
 
     Blocks until *stop_event* is set.
     """
-    global _mqtt, _heartbeat
+    global _mqtt, _heartbeat, _node_monitor
     _seed_registry()
+
+    # Create NodeMonitor and seed with default nodes.
+    from .node_monitor import NodeMonitor
+    _node_monitor = NodeMonitor(mqtt_publish=publish, missed_threshold=MISSED_HEARTBEAT_THRESHOLD)
+    for node_id, info in _DEFAULT_NODES.items():
+        _node_monitor.register_node(node_id, info["node_type"], expected_interval=HEARTBEAT_INTERVAL)
 
     _mqtt = ElmerMQTTClient(
         host=settings.MQTT_HOST,

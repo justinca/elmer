@@ -15,10 +15,11 @@ import sys
 import time
 from datetime import datetime, timezone
 
-# Allow running from repo root without installing packages.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packages"))
-
-from common.src.mqtt import ElmerMQTTClient  # noqa: E402
+try:
+    from elmer_common.mqtt import ElmerMQTTClient
+except ImportError:
+    print("elmer-common not installed. Run:  pip install -e packages/common/")
+    sys.exit(1)
 
 
 async def _print_message(topic: str, payload: dict) -> None:

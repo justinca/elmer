@@ -42,12 +42,7 @@ CREATE INDEX IF NOT EXISTS idx_events_source_type_ts
 -- -----------------------------------------------------------
 -- Documents — ingested files with vector embeddings for RAG
 -- -----------------------------------------------------------
--- NOTE: Embedding dimension is 1536 (OpenAI default). Adjust to
--- match your chosen Ollama embedding model in Phase 2:
---   nomic-embed-text  = 768
---   mxbai-embed-large = 1024
--- To change: ALTER TABLE elmer.documents ALTER COLUMN embedding TYPE vector(N);
--- and rebuild the index.
+-- Embedding dimension: 768 (nomic-embed-text via Ollama).
 CREATE TABLE IF NOT EXISTS elmer.documents (
     id              SERIAL PRIMARY KEY,
     source          VARCHAR,
@@ -56,7 +51,7 @@ CREATE TABLE IF NOT EXISTS elmer.documents (
     content         TEXT,
     content_type    VARCHAR,
     metadata        JSONB NOT NULL DEFAULT '{}'::jsonb,
-    embedding       vector(1536),
+    embedding       vector(768),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -66,10 +61,15 @@ CREATE TABLE IF NOT EXISTS elmer.documents (
 CREATE INDEX IF NOT EXISTS idx_documents_embedding
     ON elmer.documents USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 
+-- Unique index for autodoc upserts (ON CONFLICT).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_source_path
+    ON elmer.documents (source, source_path)
+    WHERE source IS NOT NULL AND source_path IS NOT NULL;
+
 -- -----------------------------------------------------------
 -- Transcriptions — Whisper speech-to-text results
 -- -----------------------------------------------------------
--- NOTE: Same embedding dimension caveat as documents above.
+-- Embedding dimension: 768 (nomic-embed-text via Ollama).
 CREATE TABLE IF NOT EXISTS elmer.transcriptions (
     id                  SERIAL PRIMARY KEY,
     audio_file          VARCHAR,
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS elmer.transcriptions (
     duration_seconds    FLOAT,
     model               VARCHAR,
     metadata            JSONB NOT NULL DEFAULT '{}'::jsonb,
-    embedding           vector(1536),
+    embedding           vector(768),
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS elmer.conversations (
 -- -----------------------------------------------------------
 -- Notes — Obsidian/markdown notes with embeddings
 -- -----------------------------------------------------------
--- NOTE: Same embedding dimension caveat as documents above.
+-- Embedding dimension: 768 (nomic-embed-text via Ollama).
 CREATE TABLE IF NOT EXISTS elmer.notes (
     id              SERIAL PRIMARY KEY,
     source          VARCHAR,
@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS elmer.notes (
     title           VARCHAR,
     content         TEXT,
     tags            TEXT[],
-    embedding       vector(1536),
+    embedding       vector(768),
     metadata        JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()

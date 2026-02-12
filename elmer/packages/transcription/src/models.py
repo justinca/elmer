@@ -1,18 +1,40 @@
 """Transcription data models."""
 
-from pydantic import BaseModel
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
-class TranscriptionRequest(BaseModel):
-    """Request to transcribe an audio file."""
+class TranscriptionSegment(BaseModel):
+    """A single timed segment from Whisper output."""
 
-    file_path: str
-    language: str = "en"
-    model: str = "base"
+    start: float
+    end: float
+    text: str
 
 
 class TranscriptionResult(BaseModel):
-    """Result of a transcription."""
+    """Full result of a transcription job."""
 
-    text: str
-    status: str
+    id: int | None = None
+    audio_file: str
+    transcript: str
+    segments: list[TranscriptionSegment] = Field(default_factory=list)
+    language: str | None = None
+    duration_seconds: float | None = None
+    model: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class TranscriptionListItem(BaseModel):
+    """Summary for list views (no full segment data)."""
+
+    id: int
+    audio_file: str
+    transcript: str
+    language: str | None = None
+    duration_seconds: float | None = None
+    model: str | None = None
+    created_at: datetime | None = None

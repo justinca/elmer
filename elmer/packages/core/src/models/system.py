@@ -27,12 +27,42 @@ class NodeHealth(BaseModel):
     host: str
     port: int
     last_seen: datetime | None = None
+    node_type: str = "unknown"
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class NodesHealthResponse(BaseModel):
     """Aggregated node health."""
 
     nodes: list[NodeHealth]
+
+
+class NodeDetailResponse(BaseModel):
+    """Detailed status for a single node."""
+
+    name: str
+    node_type: str
+    status: str
+    last_seen: datetime | None = None
+    expected_interval: float = 30.0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class NodeEvent(BaseModel):
+    """A single event from node history."""
+
+    id: int
+    timestamp: datetime
+    source: str
+    event_type: str
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+class NodeHistoryResponse(BaseModel):
+    """Recent event history for a node."""
+
+    node: str
+    events: list[NodeEvent]
 
 
 # --- Nodes ---

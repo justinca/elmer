@@ -54,7 +54,8 @@
 ```bash
 cd packages/core
 source .venv/bin/activate
-uvicorn src.main:app --reload --port 8100
+pip install -e ../common/ -e .
+uvicorn elmer_core.main:app --reload --port 8100
 ```
 
 ### Running tests

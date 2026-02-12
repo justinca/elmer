@@ -1,0 +1,27 @@
+[Unit]
+Description=Elmer WeatherPi Health Monitor
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/elmer-monitor
+ExecStart=/opt/elmer-monitor/venv/bin/python /opt/elmer-monitor/weatherpi-monitor.py
+Restart=always
+RestartSec=10
+EnvironmentFile=-/opt/elmer-monitor/.env
+
+# Resource limits — keep it lightweight on the Pi
+MemoryMax=64M
+CPUQuota=10%
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/
+ReadWritePaths=/opt/elmer-monitor
+
+[Install]
+WantedBy=multi-user.target

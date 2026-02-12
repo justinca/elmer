@@ -19,6 +19,13 @@ class GenerateRequest(BaseModel):
     stream: bool = False
 
 
+class EmbedRequest(BaseModel):
+    """Request body for embedding generation."""
+
+    model: str = "nomic-embed-text"
+    input: str | list[str]
+
+
 @router.post("/generate")
 async def generate(request: GenerateRequest):
     """Proxy a generation request to Ollama."""
@@ -27,6 +34,20 @@ async def generate(request: GenerateRequest):
             resp = await client.post(
                 f"{OLLAMA_BASE}/api/generate",
                 json=request.model_dump(),
+            )
+            return resp.json()
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=502, detail=f"Ollama unreachable: {e}")
+
+
+@router.post("/embed")
+async def embed(request: EmbedRequest):
+    """Proxy an embedding request to Ollama."""
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        try:
+            resp = await client.post(
+                f"{OLLAMA_BASE}/api/embed",
+                json={"model": request.model, "input": request.input},
             )
             return resp.json()
         except httpx.RequestError as e:

@@ -50,3 +50,6 @@ htmlcov/
 *.sqlite3
 data/
 uploads/
+
+# Auto-generated docs
+docs/auto/

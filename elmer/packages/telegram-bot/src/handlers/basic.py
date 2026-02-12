@@ -1,39 +1,321 @@
-"""Basic command handlers for the Telegram bot."""
+"""Basic command handlers for the Elmer Telegram Bot."""
 
+import logging
+from datetime import datetime
+
+import httpx
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import ContextTypes
+
+from ..config import settings
+
+logger = logging.getLogger("elmer.telegram.commands")
+
+# Status emoji mapping.
+_STATUS = {
+    "online": "\u2705",     # green check
+    "offline": "\u274c",     # red X
+    "unreachable": "\u26a0\ufe0f",  # warning
+    "unknown": "\u2753",     # question mark
+}
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /start command."""
+def _icon(status: str) -> str:
+    return _STATUS.get(status, "\u2753")
+
+
+async def _api_get(path: str, params: dict | None = None) -> dict | None:
+    """GET request to Elmer Core. Returns parsed JSON or None."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{settings.core_base_url}{path}", params=params,
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except (httpx.RequestError, httpx.HTTPStatusError) as exc:
+        logger.warning("Core API error (%s): %s", path, exc)
+        return None
+
+
+def _ago(dt_str: str | None) -> str:
+    """Human-readable time-ago from an ISO timestamp."""
+    if not dt_str:
+        return "never"
+    try:
+        dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+        delta = datetime.now(dt.tzinfo) - dt
+        secs = int(delta.total_seconds())
+        if secs < 60:
+            return f"{secs}s ago"
+        if secs < 3600:
+            return f"{secs // 60}m ago"
+        if secs < 86400:
+            return f"{secs // 3600}h ago"
+        return f"{secs // 86400}d ago"
+    except (ValueError, TypeError):
+        return "?"
+
+
+# ------------------------------------------------------------------
+# /start
+# ------------------------------------------------------------------
+
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Welcome message."""
     await update.message.reply_text(
-        "Welcome to Elmer! Your AI home lab assistant.\n\n"
-        "Commands:\n"
-        "/status — System status\n"
-        "/help — Show this message"
+        "\U0001f4e1 *Elmer — W0ABE Home Lab*\n"
+        "\n"
+        "I'm Elmer, your home lab assistant.\n"
+        "I can check on your systems, answer questions,\n"
+        "and send you alerts when things need attention.\n"
+        "\n"
+        "*Commands:*\n"
+        "/status — System overview\n"
+        "/nodes — All nodes\n"
+        "/node _name_ — Node details\n"
+        "/services — Service status\n"
+        "/events — Recent events\n"
+        "/help — This list\n"
+        "\n"
+        "Or just send me a message and I'll do my best\n"
+        "to help out. 73!",
+        parse_mode="Markdown",
     )
 
 
-async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /status command."""
+# ------------------------------------------------------------------
+# /status
+# ------------------------------------------------------------------
+
+async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """System status summary."""
+    # Core health.
+    health = await _api_get("/health")
+    if health is None:
+        await update.message.reply_text(
+            "\u274c Core unreachable — cannot fetch status."
+        )
+        return
+
+    # Nodes.
+    nodes_data = await _api_get("/health/nodes")
+    nodes = nodes_data.get("nodes", []) if nodes_data else []
+
+    online = sum(1 for n in nodes if n["status"] == "online")
+    total = len(nodes)
+
+    uptime_s = health.get("uptime_seconds", 0)
+    hours = int(uptime_s // 3600)
+    mins = int((uptime_s % 3600) // 60)
+
+    lines = [
+        f"\U0001f4e1 *Elmer Status*",
+        f"",
+        f"\u2705 Core: {health.get('status', '?')} (v{health.get('version', '?')})",
+        f"\u23f1 Uptime: {hours}h {mins}m",
+        f"\U0001f5a5 Nodes: {online}/{total} online",
+        f"",
+    ]
+
+    for node in nodes:
+        icon = _icon(node["status"])
+        name = node.get("name", node.get("node_id", "?"))
+        meta = node.get("metadata", {})
+        cpu = meta.get("cpu_percent")
+        ram = meta.get("ram_percent")
+        extra = ""
+        if cpu is not None and ram is not None:
+            extra = f"  cpu {cpu:.0f}% ram {ram:.0f}%"
+        lines.append(f"{icon} {name}: {node['status']}{extra}")
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+# ------------------------------------------------------------------
+# /nodes
+# ------------------------------------------------------------------
+
+async def cmd_nodes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """List all nodes."""
+    data = await _api_get("/health/nodes")
+    if data is None:
+        await update.message.reply_text("\u274c Could not reach Core API.")
+        return
+
+    nodes = data.get("nodes", [])
+    if not nodes:
+        await update.message.reply_text("No nodes registered yet.")
+        return
+
+    lines = ["\U0001f5a5 *Nodes*\n"]
+    for n in nodes:
+        icon = _icon(n["status"])
+        name = n.get("name", n.get("node_id", "?"))
+        seen = _ago(n.get("last_seen"))
+        ntype = n.get("node_type", "")
+        lines.append(f"{icon} *{name}* ({ntype})")
+        lines.append(f"    {n['status']} \u2022 seen {seen}")
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+# ------------------------------------------------------------------
+# /node <name>
+# ------------------------------------------------------------------
+
+async def cmd_node(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Detailed status for a specific node."""
+    if not context.args:
+        await update.message.reply_text("Usage: /node _name_", parse_mode="Markdown")
+        return
+
+    node_id = context.args[0].lower()
+    data = await _api_get(f"/health/nodes/{node_id}")
+    if data is None:
+        await update.message.reply_text(f"Node '{node_id}' not found.")
+        return
+
+    icon = _icon(data.get("status", "unknown"))
+    seen = _ago(data.get("last_seen"))
+    meta = data.get("metadata", {})
+
+    lines = [
+        f"{icon} *{data.get('name', node_id)}*",
+        f"",
+        f"Type: {data.get('node_type', '?')}",
+        f"Status: {data.get('status', '?')}",
+        f"Last seen: {seen}",
+    ]
+
+    if meta.get("hostname"):
+        lines.append(f"Host: {meta['hostname']}")
+    if meta.get("platform"):
+        lines.append(f"Platform: {meta['platform']}")
+    if meta.get("cpu_percent") is not None:
+        lines.append(f"CPU: {meta['cpu_percent']:.1f}%")
+    if meta.get("ram_percent") is not None:
+        lines.append(
+            f"RAM: {meta['ram_percent']:.1f}% "
+            f"({meta.get('ram_used_mb', 0)}/"
+            f"{meta.get('ram_total_mb', 0)} MB)"
+        )
+    if meta.get("disk_percent") is not None:
+        lines.append(
+            f"Disk: {meta['disk_percent']:.1f}% "
+            f"({meta.get('disk_used_gb', 0):.1f}/"
+            f"{meta.get('disk_total_gb', 0):.1f} GB)"
+        )
+    if meta.get("cpu_temp_c") is not None:
+        lines.append(f"CPU temp: {meta['cpu_temp_c']}\u00b0C")
+    if meta.get("system_uptime_seconds") is not None:
+        h = int(meta["system_uptime_seconds"] // 3600)
+        lines.append(f"System uptime: {h}h")
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+# ------------------------------------------------------------------
+# /services
+# ------------------------------------------------------------------
+
+async def cmd_services(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """List all services and their status."""
+    data = await _api_get("/health/nodes")
+    if data is None:
+        await update.message.reply_text("\u274c Could not reach Core API.")
+        return
+
+    nodes = data.get("nodes", [])
+    if not nodes:
+        await update.message.reply_text("No services registered.")
+        return
+
+    lines = ["\u2699\ufe0f *Services*\n"]
+    for n in nodes:
+        icon = _icon(n["status"])
+        name = n.get("name", n.get("node_id", "?"))
+        ntype = n.get("node_type", "")
+        host = n.get("host", "")
+        port = n.get("port", 0)
+        addr = f"{host}:{port}" if host and port else "—"
+        lines.append(f"{icon} *{name}*")
+        lines.append(f"    {ntype} \u2022 {addr} \u2022 {n['status']}")
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+# ------------------------------------------------------------------
+# /events [n]
+# ------------------------------------------------------------------
+
+async def cmd_events(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show recent events."""
+    limit = 10
+    if context.args:
+        try:
+            limit = max(1, min(50, int(context.args[0])))
+        except ValueError:
+            pass
+
+    # Try the events endpoint first, fall back to node history.
+    data = await _api_get("/events", params={"limit": limit})
+    if data is not None:
+        events = data if isinstance(data, list) else data.get("events", [])
+    else:
+        # Fallback: aggregate from all known nodes.
+        nodes_data = await _api_get("/health/nodes")
+        events = []
+        if nodes_data:
+            for n in nodes_data.get("nodes", []):
+                nid = n.get("node_id", n.get("name", ""))
+                hist = await _api_get(
+                    f"/health/nodes/{nid}/history", params={"hours": 24},
+                )
+                if hist:
+                    events.extend(hist.get("events", []))
+        # Sort by timestamp descending, take top N.
+        events.sort(
+            key=lambda e: e.get("timestamp", ""), reverse=True,
+        )
+        events = events[:limit]
+
+    if not events:
+        await update.message.reply_text("No recent events.")
+        return
+
+    lines = [f"\U0001f4cb *Recent Events* (last {len(events)})\n"]
+    for ev in events:
+        ts = ev.get("timestamp", "")
+        if ts:
+            try:
+                dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                ts = dt.strftime("%H:%M")
+            except ValueError:
+                ts = ts[:16]
+        source = ev.get("source", "?")
+        etype = ev.get("event_type", "?")
+        lines.append(f"`{ts}` {source}: {etype}")
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+# ------------------------------------------------------------------
+# /help
+# ------------------------------------------------------------------
+
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """List all commands."""
     await update.message.reply_text(
-        "Checking system status...\n"
-        "(Status check not yet wired to core API)"
+        "\U0001f4e1 *Elmer Commands*\n"
+        "\n"
+        "/status — System overview\n"
+        "/nodes — List all nodes with status\n"
+        "/node _name_ — Detailed node info\n"
+        "/services — Service list and status\n"
+        "/events _\\[n\\]_ — Last N events (default 10)\n"
+        "/help — This message\n"
+        "\n"
+        "Send any text message to chat with Elmer.",
+        parse_mode="Markdown",
     )
-
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /help command."""
-    await update.message.reply_text(
-        "Elmer Bot Commands:\n"
-        "/start — Welcome message\n"
-        "/status — Check system health\n"
-        "/help — This help message"
-    )
-
-
-def register_handlers(app: Application):
-    """Register all command handlers."""
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("status", status))
-    app.add_handler(CommandHandler("help", help_command))

@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # Knowledge base
     OBSIDIAN_VAULT_PATH: str = ""
 
+    # Auto-documentation
+    AUTODOC_INTERVAL_HOURS: float = 6.0
+
     @property
     def worker_base_url(self) -> str:
         return f"http://{self.ELMER_WORKER_HOST}:{self.ELMER_WORKER_PORT}"

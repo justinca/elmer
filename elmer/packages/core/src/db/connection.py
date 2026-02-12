@@ -4,9 +4,7 @@ Provides a singleton pool manager used by all Elmer services.  The pool
 is created lazily on first call to ``connect()`` and tolerates a missing
 database at startup so the rest of the application can still run.
 
-NOTE: Embedding dimension is 1536 by default (OpenAI ada-002).  When the
-Ollama embedding model is selected in Phase 2 the vector columns should
-be resized to match (nomic-embed-text=768, mxbai-embed-large=1024).
+Embedding dimension is 768 (nomic-embed-text via Ollama).
 """
 
 import asyncio

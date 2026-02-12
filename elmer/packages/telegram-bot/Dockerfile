@@ -2,9 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy package sources (context is repo root).
+COPY packages/common/ /app/packages/common/
+COPY packages/telegram-bot/ /app/packages/telegram-bot/
 
-COPY src/ ./src/
+# Install common first (for MQTT), then the bot.
+RUN pip install --no-cache-dir /app/packages/common/ /app/packages/telegram-bot/
 
-CMD ["python", "-m", "src.main"]
+CMD ["python", "-m", "elmer_telegram.main"]

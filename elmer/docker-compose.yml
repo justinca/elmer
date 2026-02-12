@@ -34,6 +34,8 @@ services:
     container_name: elmer-core
     network_mode: host
     env_file: .env
+    volumes:
+      - ./docs:/app/docs
     restart: unless-stopped
     healthcheck:
       test:
@@ -71,8 +73,8 @@ services:
   # --------------------------------------------------------
   elmer-telegram:
     build:
-      context: ./packages/telegram-bot
-      dockerfile: Dockerfile
+      context: .                          # repo root (needs packages/common/ + packages/telegram-bot/)
+      dockerfile: packages/telegram-bot/Dockerfile
     container_name: elmer-telegram
     network_mode: host
     env_file: .env
@@ -82,9 +84,9 @@ services:
         condition: service_healthy
 
   # --------------------------------------------------------
-  # Knowledge — RAG pipeline & document ingestion
-  # Mounts Obsidian vault read-only for indexing.
-  # Set OBSIDIAN_VAULT_PATH in .env to your vault directory.
+  # Knowledge — RAG pipeline & Obsidian sync scheduler
+  # Vault access goes through the Worker API (Windows).
+  # Runs periodic incremental syncs (default every 1 hour).
   # Also needs PostgreSQL (native, localhost:5432).
   # --------------------------------------------------------
   elmer-knowledge:
@@ -94,11 +96,28 @@ services:
     container_name: elmer-knowledge
     network_mode: host
     env_file: .env
+    restart: unless-stopped
+    depends_on:
+      elmer-core:
+        condition: service_healthy
+
+  # --------------------------------------------------------
+  # Transcription — watches for audio files, sends to worker
+  # Mounts ~/elmer/audio/inbox and ~/elmer/audio/processed
+  # --------------------------------------------------------
+  elmer-transcription:
+    build:
+      context: ./packages/transcription
+      dockerfile: Dockerfile
+    container_name: elmer-transcription
+    network_mode: host
+    env_file: .env
     environment:
-      # Inside the container the vault is always at /data/vault
-      OBSIDIAN_VAULT_PATH: /data/vault
+      TRANSCRIPTION_WATCH_DIR: /data/inbox
+      TRANSCRIPTION_PROCESSED_DIR: /data/processed
     volumes:
-      - ${OBSIDIAN_VAULT_PATH:-./data/vault}:/data/vault:ro
+      - ./audio/inbox:/data/inbox
+      - ./audio/processed:/data/processed
     restart: unless-stopped
     depends_on:
       elmer-core:

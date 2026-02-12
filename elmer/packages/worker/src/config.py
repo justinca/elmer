@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     OLLAMA_HOST: str = "localhost"
     OLLAMA_PORT: int = 11434
 
+    OBSIDIAN_VAULT_PATH: str = ""
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

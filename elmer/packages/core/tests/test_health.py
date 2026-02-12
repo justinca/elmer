@@ -9,8 +9,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.main import app
-from src.routes import health
+from elmer_core.main import app
+from elmer_core.routes import health
 
 
 @asynccontextmanager

@@ -9,8 +9,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routes import health, llm, nodes
-from .services import db, mqtt_service
+from .routes import docs, health, knowledge, llm, nodes, notes, transcription
+from .services import autodoc, db, mqtt_service
+from .services.autodoc import SystemDocumentor, _periodic_generation
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,12 +39,38 @@ async def lifespan(app: FastAPI):
     # Give MQTT a moment to connect before accepting requests.
     await asyncio.sleep(0.5)
 
+    # Wire NodeMonitor into health routes for the new /health/nodes endpoints.
+    node_monitor = mqtt_service.get_node_monitor()
+    if node_monitor is not None:
+        health.set_node_monitor(node_monitor)
+
+    # Wire up the auto-documentation system.
+    documentor = SystemDocumentor(node_monitor)
+    autodoc.set_documentor(documentor)
+    docs.set_documentor(documentor)
+
+    # Fire initial doc generation as a background task.
+    asyncio.create_task(documentor.generate_all())
+
+    # Start periodic doc regeneration.
+    autodoc_stop = asyncio.Event()
+    autodoc_task = asyncio.create_task(
+        _periodic_generation(documentor, autodoc_stop, settings.AUTODOC_INTERVAL_HOURS)
+    )
+
     logger.info("Elmer Core ready — http://%s:%s", settings.ELMER_CORE_HOST, settings.ELMER_CORE_PORT)
 
     yield
 
     # Shutdown
     logger.info("Elmer Core shutting down...")
+
+    # Stop autodoc periodic task.
+    autodoc_stop.set()
+    try:
+        await asyncio.wait_for(autodoc_task, timeout=5.0)
+    except asyncio.TimeoutError:
+        autodoc_task.cancel()
 
     # Signal MQTT loop to stop (run() handles offline publish + cleanup).
     mqtt_stop.set()
@@ -76,13 +103,17 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(nodes.router)
 app.include_router(llm.router)
+app.include_router(docs.router)
+app.include_router(knowledge.router)
+app.include_router(transcription.router)
+app.include_router(notes.router)
 
 
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        "src.main:app",
+        "elmer_core.main:app",
         host=settings.ELMER_CORE_HOST,
         port=settings.ELMER_CORE_PORT,
         reload=True,

@@ -7,4 +7,5 @@ if exist .venv\Scripts\activate.bat (
     call .venv\Scripts\activate.bat
 )
 
-python -m uvicorn src.main:app --host 0.0.0.0 --port 8101 --reload
+pip install -e . >nul 2>&1
+python -m uvicorn elmer_worker.main:app --host 0.0.0.0 --port 8101 --reload
