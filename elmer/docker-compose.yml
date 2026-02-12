@@ -1,0 +1,65 @@
+services:
+  core:
+    build:
+      context: ./packages/core
+      dockerfile: Dockerfile
+    ports:
+      - "${ELMER_CORE_PORT:-8100}:8100"
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - mqtt
+
+  dashboard:
+    build:
+      context: ./packages/dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - core
+
+  telegram-bot:
+    build:
+      context: ./packages/telegram-bot
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - core
+
+  agents:
+    build:
+      context: ./packages/agents
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - core
+
+  knowledge:
+    build:
+      context: ./packages/knowledge
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - core
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+    volumes:
+      - mosquitto_data:/mosquitto/data
+    restart: unless-stopped
+
+volumes:
+  mosquitto_data:
