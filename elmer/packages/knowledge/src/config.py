@@ -52,6 +52,10 @@ class KnowledgeSettings(BaseSettings):
     # Obsidian sync
     OBSIDIAN_SYNC_INTERVAL: int = 3600  # seconds
 
+    # Elmer docs auto-ingestion
+    ELMER_DOCS_PATH: str = str(Path.home() / "elmer" / "docs")
+    DOCS_SYNC_INTERVAL: int = 3600  # seconds
+
     @property
     def worker_base_url(self) -> str:
         return f"http://{self.ELMER_WORKER_HOST}:{self.ELMER_WORKER_PORT}"

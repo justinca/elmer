@@ -49,7 +49,7 @@ heartbeat** (default every 30 s).
 | `online` | Node is healthy and publishing heartbeats |
 | `degraded` | Node is up but a subsystem is impaired |
 | `offline` | Node published a clean shutdown |
-| `unreachable` | Core has not received heartbeats (3× missed interval) |
+| `unreachable` | Core has not received heartbeats (3x missed interval) |
 
 ## System Events
 
@@ -71,19 +71,65 @@ General-purpose event bus. Events are also persisted to the
 }
 ```
 
+## Knowledge & RAG (Phase 2)
+
+| Topic | Publisher | Description |
+|---|---|---|
+| `elmer/knowledge/obsidian/sync` | Core / Knowledge | Obsidian vault sync results |
+| `elmer/knowledge/sync` | Knowledge | General knowledge sync notification |
+| `elmer/transcription/result` | Core / Transcription | Completed transcription with metadata |
+| `elmer/scheduler/{task_name}` | Core Scheduler | Scheduled task execution result |
+
+### Obsidian Sync Payload
+
+```json
+{
+  "event": "full_sync",
+  "added": 5,
+  "updated": 2,
+  "deleted": 0,
+  "unchanged": 43,
+  "errors": 0,
+  "duration_seconds": 12.5,
+  "timestamp": "2026-02-12T14:30:00+00:00"
+}
+```
+
+### Transcription Result Payload
+
+```json
+{
+  "id": 42,
+  "audio_file": "recording.wav",
+  "transcript": "First 500 characters of the transcription...",
+  "language": "en",
+  "duration_seconds": 120.5
+}
+```
+
+### Scheduler Task Payload
+
+```json
+{
+  "task": "ingest-docs",
+  "status": "ok",
+  "duration_seconds": 3.45,
+  "run_count": 12,
+  "timestamp": "2026-02-12T14:30:00+00:00",
+  "result": {
+    "ingested": 8,
+    "skipped": 3,
+    "errors": []
+  }
+}
+```
+
 ## Agents
 
 | Topic | Description |
 |---|---|
 | `elmer/agents/{agent_id}/status` | Agent online/offline/busy |
 | `elmer/agents/{agent_id}/output` | Agent output / results |
-
-## Transcription
-
-| Topic | Description |
-|---|---|
-| `elmer/transcription/request` | Request a Whisper transcription job |
-| `elmer/transcription/result` | Completed transcription result |
 
 ## Chat
 
@@ -101,5 +147,7 @@ Useful wildcard subscriptions:
 | `elmer/+/heartbeat` | All node heartbeats |
 | `elmer/+/status` | All node status messages |
 | `elmer/events/#` | All system events |
+| `elmer/knowledge/#` | All knowledge/sync events |
+| `elmer/scheduler/#` | All scheduler task results |
 | `elmer/agents/#` | All agent traffic |
 | `elmer/#` | Everything |

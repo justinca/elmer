@@ -158,3 +158,14 @@ async def health_node_history(node_id: str, hours: int = 24) -> NodeHistoryRespo
     ]
 
     return NodeHistoryResponse(node=node_id, events=events)
+
+
+@router.get("/health/scheduler")
+async def scheduler_status():
+    """Return status of all scheduled tasks."""
+    from ..services.scheduler import get_scheduler
+
+    scheduler = get_scheduler()
+    if scheduler is None:
+        return {"status": "not_started", "tasks": []}
+    return {"status": "running", "tasks": scheduler.get_status()}

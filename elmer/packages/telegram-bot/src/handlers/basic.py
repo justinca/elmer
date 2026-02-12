@@ -5,9 +5,11 @@ from datetime import datetime
 
 import httpx
 from telegram import Update
+from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 
 from ..config import settings
+from .chat import clear_user_conversation, get_user_model, set_user_model
 
 logger = logging.getLogger("elmer.telegram.commands")
 
@@ -64,22 +66,29 @@ def _ago(dt_str: str | None) -> str:
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Welcome message."""
     await update.message.reply_text(
-        "\U0001f4e1 *Elmer — W0ABE Home Lab*\n"
+        "\U0001f4e1 *Elmer \u2014 W0ABE Home Lab*\n"
         "\n"
-        "I'm Elmer, your home lab assistant.\n"
-        "I can check on your systems, answer questions,\n"
-        "and send you alerts when things need attention.\n"
+        "I'm Elmer, your AI-powered home lab assistant.\n"
+        "I know about your systems, radio setup, network,\n"
+        "and anything in your knowledge base.\n"
         "\n"
-        "*Commands:*\n"
-        "/status — System overview\n"
-        "/nodes — All nodes\n"
-        "/node _name_ — Node details\n"
-        "/services — Service status\n"
-        "/events — Recent events\n"
-        "/help — This list\n"
+        "*Just send me a message* and I'll answer using\n"
+        "your docs, notes, and transcripts as context.\n"
         "\n"
-        "Or just send me a message and I'll do my best\n"
-        "to help out. 73!",
+        "\U0001f9e0 *Knowledge*\n"
+        "/search _query_ \u2014 Search your knowledge base\n"
+        "/sources \u2014 See what's indexed\n"
+        "/notes \u2014 Recent Obsidian notes\n"
+        "\n"
+        "\U0001f3a4 *Transcription*\n"
+        "Send a voice message to transcribe it\n"
+        "/transcripts \u2014 Recent transcriptions\n"
+        "\n"
+        "\U0001f5a5 *System*\n"
+        "/status \u2014 System overview\n"
+        "/nodes \u2014 All nodes\n"
+        "\n"
+        "/help for the full command list. 73!",
         parse_mode="Markdown",
     )
 
@@ -309,13 +318,148 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "\U0001f4e1 *Elmer Commands*\n"
         "\n"
-        "/status — System overview\n"
-        "/nodes — List all nodes with status\n"
-        "/node _name_ — Detailed node info\n"
-        "/services — Service list and status\n"
-        "/events _\\[n\\]_ — Last N events (default 10)\n"
-        "/help — This message\n"
+        "*Chat*\n"
+        "Send any message \u2014 AI chat with knowledge\n"
+        "/newchat \u2014 Start fresh conversation\n"
+        "/model _name_ \u2014 Switch LLM model\n"
+        "/models \u2014 List available models\n"
         "\n"
-        "Send any text message to chat with Elmer.",
+        "*Knowledge*\n"
+        "/search _query_ \u2014 Semantic search\n"
+        "/sources \u2014 Knowledge sources & counts\n"
+        "/notes \u2014 Recent Obsidian notes\n"
+        "/note _id_ \u2014 Read a specific note\n"
+        "/sync \u2014 Trigger manual sync\n"
+        "\n"
+        "*Transcription*\n"
+        "Send a voice message to transcribe\n"
+        "/transcripts \u2014 Recent transcriptions\n"
+        "/transcript _id_ \u2014 Read full transcript\n"
+        "/tsearch _query_ \u2014 Search transcriptions\n"
+        "\n"
+        "*System*\n"
+        "/status \u2014 System overview\n"
+        "/nodes \u2014 All nodes with status\n"
+        "/node _name_ \u2014 Detailed node info\n"
+        "/services \u2014 Service list\n"
+        "/events _\\[n\\]_ \u2014 Last N events\n"
+        "/notifications _on/off_ \u2014 Toggle alerts\n"
+        "/help \u2014 This message",
         parse_mode="Markdown",
     )
+
+
+# ------------------------------------------------------------------
+# /newchat
+# ------------------------------------------------------------------
+
+async def cmd_newchat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Start a fresh conversation (reset RAG context)."""
+    user_id = update.effective_user.id if update.effective_user else 0
+    old_id = clear_user_conversation(user_id)
+    if old_id is not None:
+        await update.message.reply_text(
+            "\U0001f195 New conversation started. Previous context cleared."
+        )
+    else:
+        await update.message.reply_text(
+            "\U0001f195 Ready for a new conversation."
+        )
+
+
+# ------------------------------------------------------------------
+# /model <name>
+# ------------------------------------------------------------------
+
+async def cmd_model(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Switch the LLM model for chat."""
+    user_id = update.effective_user.id if update.effective_user else 0
+
+    if not context.args:
+        current = get_user_model(user_id)
+        await update.message.reply_text(
+            f"Current model: `{current}`\n"
+            "Usage: /model _name_ (e.g. /model llama3.1:8b)\n"
+            "Use /models to see available options.",
+            parse_mode="Markdown",
+        )
+        return
+
+    model_name = context.args[0]
+    set_user_model(user_id, model_name)
+    await update.message.reply_text(f"Model switched to `{model_name}`", parse_mode="Markdown")
+
+
+# ------------------------------------------------------------------
+# /models
+# ------------------------------------------------------------------
+
+async def cmd_models(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """List available models from Ollama."""
+    await update.message.chat.send_action(ChatAction.TYPING)
+
+    data = await _api_get("/llm/models")
+    if data is None:
+        await update.message.reply_text("Could not reach the LLM service.")
+        return
+
+    models = data.get("models", [])
+    error = data.get("error")
+    if error:
+        await update.message.reply_text(f"LLM error: {error}")
+        return
+
+    if not models:
+        await update.message.reply_text("No models available.")
+        return
+
+    user_id = update.effective_user.id if update.effective_user else 0
+    current = get_user_model(user_id)
+
+    lines = ["\U0001f916 *Available Models*\n"]
+    for m in models:
+        name = m.get("name", "?")
+        size = m.get("size")
+        size_str = ""
+        if size:
+            gb = size / (1024 ** 3)
+            size_str = f" ({gb:.1f} GB)"
+        marker = " \u2190 current" if name == current else ""
+        lines.append(f"  \u2022 `{name}`{size_str}{marker}")
+
+    lines.append(f"\nUse /model _name_ to switch.")
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+# ------------------------------------------------------------------
+# /notifications on|off
+# ------------------------------------------------------------------
+
+async def cmd_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Toggle notification alerts."""
+    user_id = update.effective_user.id if update.effective_user else 0
+
+    if not context.args:
+        # Check current state.
+        notifier = context.application.bot_data.get("notifier")
+        muted = context.application.bot_data.get("muted_users", set())
+        is_muted = user_id in muted
+        state = "off" if is_muted else "on"
+        await update.message.reply_text(
+            f"Notifications are currently *{state}*.\n"
+            "Usage: /notifications on or /notifications off",
+            parse_mode="Markdown",
+        )
+        return
+
+    action = context.args[0].lower()
+    muted = context.application.bot_data.setdefault("muted_users", set())
+
+    if action == "off":
+        muted.add(user_id)
+        await update.message.reply_text("\U0001f515 Notifications disabled.")
+    elif action == "on":
+        muted.discard(user_id)
+        await update.message.reply_text("\U0001f514 Notifications enabled.")
+    else:
+        await update.message.reply_text("Usage: /notifications on or /notifications off")

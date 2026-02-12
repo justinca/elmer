@@ -21,45 +21,71 @@ class EmbeddingService:
         timeout: float = 60.0,
     ):
         self.worker_url = worker_url or settings.worker_embed_url
+        self.ollama_url = settings.ollama_embed_url
         self.model = model or settings.EMBEDDING_MODEL
         self.timeout = timeout
 
-    async def embed_text(self, text: str) -> list[float]:
-        """Embed a single text string and return the vector.
+    async def _call_embed(
+        self, url: str, payload: dict,
+    ) -> list[list[float]]:
+        """Call an embed endpoint and extract the embeddings list.
 
-        Calls POST {worker}/llm/embed with the configured model.
-
-        Raises:
-            httpx.TimeoutException: If the worker/Ollama doesn't respond
-                within the timeout period.
-            httpx.HTTPStatusError: If the worker returns an error status.
-            RuntimeError: If the response is missing embedding data.
+        Handles both Ollama response formats:
+          - New /api/embed: {"embeddings": [[...], ...]}
+          - Old /api/embeddings: {"embedding": [...]}
         """
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            try:
-                resp = await client.post(
-                    self.worker_url,
-                    json={"model": self.model, "input": text},
-                )
-                resp.raise_for_status()
-            except httpx.TimeoutException:
-                logger.error(
-                    "Timeout after %.0fs waiting for embedding from %s",
-                    self.timeout, self.worker_url,
-                )
-                raise
-            except httpx.ConnectError as exc:
-                logger.error("Worker unreachable at %s: %s", self.worker_url, exc)
-                raise
+            resp = await client.post(url, json=payload)
+            resp.raise_for_status()
 
         data = resp.json()
         if data.get("error"):
             raise RuntimeError(f"Embedding error: {data['error']}")
 
+        # New format: "embeddings" (list of lists).
         embeddings = data.get("embeddings", [])
-        if not embeddings:
-            raise RuntimeError("No embeddings returned from worker")
-        return embeddings[0]
+        if embeddings:
+            return embeddings
+
+        # Old format: "embedding" (single list).
+        embedding = data.get("embedding", [])
+        if embedding:
+            return [embedding]
+
+        return []
+
+    async def embed_text(self, text: str) -> list[float]:
+        """Embed a single text string and return the vector.
+
+        Tries the worker first, falls back to direct Ollama.
+
+        Raises:
+            RuntimeError: If both worker and Ollama fail.
+        """
+        payload = {"model": self.model, "input": text}
+
+        # Try worker first.
+        try:
+            embeddings = await self._call_embed(self.worker_url, payload)
+            if embeddings:
+                return embeddings[0]
+            logger.warning("Worker returned no embeddings, falling back to Ollama direct")
+        except (httpx.RequestError, RuntimeError) as exc:
+            logger.warning("Worker embed failed (%s), falling back to Ollama direct", exc)
+
+        # Fall back to direct Ollama.
+        try:
+            embeddings = await self._call_embed(self.ollama_url, payload)
+            if embeddings:
+                return embeddings[0]
+        except httpx.TimeoutException:
+            logger.error("Timeout waiting for Ollama embed at %s", self.ollama_url)
+            raise
+        except httpx.ConnectError as exc:
+            logger.error("Ollama unreachable at %s: %s", self.ollama_url, exc)
+            raise
+
+        raise RuntimeError("No embeddings returned from worker or Ollama")
 
     async def embed_batch(
         self,
@@ -70,6 +96,7 @@ class EmbeddingService:
         """Embed multiple texts with rate limiting to avoid overwhelming the GPU.
 
         Processes texts in batches, with a short delay between batches.
+        Falls back to direct Ollama if the worker fails.
 
         Args:
             texts: List of text strings to embed.
@@ -83,29 +110,28 @@ class EmbeddingService:
 
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
+            payload = {"model": self.model, "input": batch}
 
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            # Try worker first, then direct Ollama.
+            embeddings: list[list[float]] = []
+            try:
+                embeddings = await self._call_embed(self.worker_url, payload)
+            except (httpx.RequestError, RuntimeError) as exc:
+                logger.warning(
+                    "Worker batch %d–%d failed (%s), trying Ollama direct",
+                    i, i + len(batch), exc,
+                )
+
+            if len(embeddings) != len(batch):
+                # Worker didn't return the right count — try Ollama directly.
                 try:
-                    resp = await client.post(
-                        self.worker_url,
-                        json={"model": self.model, "input": batch},
-                    )
-                    resp.raise_for_status()
-                except httpx.TimeoutException:
+                    embeddings = await self._call_embed(self.ollama_url, payload)
+                except (httpx.RequestError, RuntimeError) as exc:
                     logger.error(
-                        "Timeout on batch %d–%d (of %d texts)",
-                        i, i + len(batch), len(texts),
+                        "Ollama batch %d–%d also failed: %s", i, i + len(batch), exc,
                     )
                     raise
-                except httpx.ConnectError as exc:
-                    logger.error("Worker unreachable at %s: %s", self.worker_url, exc)
-                    raise
 
-            data = resp.json()
-            if data.get("error"):
-                raise RuntimeError(f"Batch embedding error: {data['error']}")
-
-            embeddings = data.get("embeddings", [])
             if len(embeddings) != len(batch):
                 raise RuntimeError(
                     f"Expected {len(batch)} embeddings, got {len(embeddings)}"

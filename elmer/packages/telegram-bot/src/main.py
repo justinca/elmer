@@ -19,14 +19,31 @@ from .config import settings
 from .handlers.basic import (
     cmd_events,
     cmd_help,
+    cmd_model,
+    cmd_models,
+    cmd_newchat,
     cmd_node,
     cmd_nodes,
+    cmd_notifications,
     cmd_services,
     cmd_start,
     cmd_status,
 )
-from .handlers.chat import handle_message
+from .handlers.chat import handle_message, handle_photo
+from .handlers.knowledge import (
+    cmd_note,
+    cmd_notes,
+    cmd_search,
+    cmd_sources,
+    cmd_sync,
+)
 from .handlers.notifications import NotificationManager
+from .handlers.transcription import (
+    cmd_transcript,
+    cmd_transcripts,
+    cmd_tsearch,
+    handle_voice,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,13 +88,16 @@ async def post_init(application: Application) -> None:
     await application.bot.set_my_commands([
         BotCommand("status", "System status summary"),
         BotCommand("nodes", "List all nodes"),
-        BotCommand("services", "List all services"),
-        BotCommand("events", "Recent events"),
-        BotCommand("help", "Available commands"),
+        BotCommand("search", "Search knowledge base"),
+        BotCommand("sources", "Knowledge sources"),
+        BotCommand("transcripts", "Recent transcriptions"),
+        BotCommand("newchat", "Start fresh conversation"),
+        BotCommand("models", "List available LLM models"),
+        BotCommand("help", "All commands"),
     ])
 
     # Start MQTT notification manager.
-    notifier = NotificationManager(application.bot)
+    notifier = NotificationManager(application.bot, application=application)
     application.bot_data["notifier"] = notifier
     await notifier.start()
     logger.info("MQTT notification manager started")
@@ -130,6 +150,7 @@ def main() -> None:
 
     # Register command handlers (authorized users only).
     commands = {
+        # Basic / system.
         "start": cmd_start,
         "status": cmd_status,
         "nodes": cmd_nodes,
@@ -137,14 +158,42 @@ def main() -> None:
         "services": cmd_services,
         "events": cmd_events,
         "help": cmd_help,
+        # Chat.
+        "newchat": cmd_newchat,
+        "model": cmd_model,
+        "models": cmd_models,
+        # Knowledge.
+        "search": cmd_search,
+        "notes": cmd_notes,
+        "note": cmd_note,
+        "sources": cmd_sources,
+        "sync": cmd_sync,
+        # Transcription.
+        "transcripts": cmd_transcripts,
+        "transcript": cmd_transcript,
+        "tsearch": cmd_tsearch,
+        # Notifications.
+        "notifications": cmd_notifications,
     }
     for name, handler_fn in commands.items():
         app.add_handler(CommandHandler(name, handler_fn, filters=user_filter))
 
-    # Text messages → LLM chat (authorized users only).
+    # Text messages -> RAG chat (authorized users only).
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & user_filter,
         handle_message,
+    ))
+
+    # Voice messages -> transcription (authorized users only).
+    app.add_handler(MessageHandler(
+        filters.VOICE & user_filter,
+        handle_voice,
+    ))
+
+    # Photo messages -> acknowledge (authorized users only).
+    app.add_handler(MessageHandler(
+        filters.PHOTO & user_filter,
+        handle_photo,
     ))
 
     # Catch-all: reject unauthorized users with polite message.
