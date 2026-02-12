@@ -1,68 +1,109 @@
+# ============================================================
+# Elmer — Docker Compose (NUC deployment)
+# ============================================================
+# Runs ALONGSIDE the existing NUC Docker Compose stack
+# (Home Assistant, Jellyfin, Node-RED, Mosquitto, Music Assistant).
+#
+# Uses network_mode: host so containers can directly reach:
+#   - PostgreSQL ... localhost:5432 (native install, not Docker)
+#   - Mosquitto .... localhost:1883 (existing Docker container)
+#   - Ollama ....... localhost:11434
+#   - Each other ... localhost:<port>
+#
+# Does NOT manage: PostgreSQL, Mosquitto, Ollama, or the Worker.
+# Worker runs on Windows — not included here.
+#
+# Quick start:
+#   cp .env.example .env   # then edit with your values
+#   make up                 # or: docker compose up -d --build
+#
+# Find your existing Mosquitto container:
+#   docker ps --filter "ancestor=eclipse-mosquitto"
+# ============================================================
+
 services:
-  # PostgreSQL runs natively on the NUC (not in Docker).
-  # Connection settings are in .env — see POSTGRES_* variables.
 
-  core:
+  # --------------------------------------------------------
+  # Core API — central gateway for all Elmer services
+  # Binds to port 8100 on the host
+  # --------------------------------------------------------
+  elmer-core:
     build:
-      context: .
+      context: .                          # repo root (needs packages/common/ + packages/core/)
       dockerfile: packages/core/Dockerfile
-    ports:
-      - "${ELMER_CORE_PORT:-8100}:8100"
-    env_file:
-      - .env
+    container_name: elmer-core
+    network_mode: host
+    env_file: .env
     restart: unless-stopped
-    depends_on:
-      - mqtt
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8100/health')"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
-  dashboard:
+  # --------------------------------------------------------
+  # Dashboard — Streamlit web UI
+  # Binds to port 8501 on the host
+  # --------------------------------------------------------
+  elmer-dashboard:
     build:
       context: ./packages/dashboard
       dockerfile: Dockerfile
-    ports:
-      - "8501:8501"
-    env_file:
-      - .env
+    container_name: elmer-dashboard
+    network_mode: host
+    env_file: .env
+    environment:
+      # Ensure dashboard connects to Core via localhost (not 0.0.0.0)
+      ELMER_CORE_HOST: localhost
     restart: unless-stopped
     depends_on:
-      - core
+      elmer-core:
+        condition: service_healthy
 
-  telegram-bot:
+  # --------------------------------------------------------
+  # Telegram Bot — chat interface to Elmer
+  # No port binding (outbound only to Telegram API)
+  # --------------------------------------------------------
+  elmer-telegram:
     build:
       context: ./packages/telegram-bot
       dockerfile: Dockerfile
-    env_file:
-      - .env
+    container_name: elmer-telegram
+    network_mode: host
+    env_file: .env
     restart: unless-stopped
     depends_on:
-      - core
+      elmer-core:
+        condition: service_healthy
 
-  agents:
-    build:
-      context: ./packages/agents
-      dockerfile: Dockerfile
-    env_file:
-      - .env
-    restart: unless-stopped
-    depends_on:
-      - core
-
-  knowledge:
+  # --------------------------------------------------------
+  # Knowledge — RAG pipeline & document ingestion
+  # Mounts Obsidian vault read-only for indexing.
+  # Set OBSIDIAN_VAULT_PATH in .env to your vault directory.
+  # Also needs PostgreSQL (native, localhost:5432).
+  # --------------------------------------------------------
+  elmer-knowledge:
     build:
       context: ./packages/knowledge
       dockerfile: Dockerfile
-    env_file:
-      - .env
+    container_name: elmer-knowledge
+    network_mode: host
+    env_file: .env
+    environment:
+      # Inside the container the vault is always at /data/vault
+      OBSIDIAN_VAULT_PATH: /data/vault
+    volumes:
+      - ${OBSIDIAN_VAULT_PATH:-./data/vault}:/data/vault:ro
     restart: unless-stopped
     depends_on:
-      - core
-
-  mqtt:
-    image: eclipse-mosquitto:2
-    ports:
-      - "${MQTT_PORT:-1883}:1883"
-    volumes:
-      - mosquitto_data:/mosquitto/data
-    restart: unless-stopped
+      elmer-core:
+        condition: service_healthy
 
 volumes:
-  mosquitto_data:
+  elmer-data:
+    name: elmer-data

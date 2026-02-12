@@ -1,42 +1,134 @@
 # ============================================================
-# Base Compose — Existing NUC infrastructure services
-# These are services already running on the NUC that Elmer
-# integrates with but does not manage directly.
+# Elmer — Reference: Integrating with Existing NUC Services
 # ============================================================
-
-services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-elmer}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-      POSTGRES_DB: ${POSTGRES_DB:-elmer}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-
-  mosquitto:
-    image: eclipse-mosquitto:2
-    ports:
-      - "${MQTT_PORT:-1883}:1883"
-      - "9001:9001"
-    volumes:
-      - mosquitto_data:/mosquitto/data
-      - mosquitto_config:/mosquitto/config
-    restart: unless-stopped
-
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "${OLLAMA_PORT:-11434}:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    restart: unless-stopped
-
-volumes:
-  postgres_data:
-  mosquitto_data:
-  mosquitto_config:
-  ollama_data:
+# This file is NOT used directly by docker compose.
+# It documents how Elmer coexists with services already
+# running on the NUC.
+#
+# ============================================================
+# YOUR EXISTING NUC STACK (separate docker-compose.yml)
+# ============================================================
+#
+#   - Home Assistant
+#   - Jellyfin
+#   - Node-RED
+#   - Mosquitto (MQTT broker, container 6a2bc5cf42dd)
+#   - Music Assistant
+#
+# Elmer does NOT manage these. Its own docker-compose.yml
+# uses network_mode: host so every container shares the
+# host's network stack and can reach localhost services.
+#
+# ============================================================
+# HOW HOST NETWORKING WORKS
+# ============================================================
+#
+# With network_mode: host, Elmer containers see:
+#
+#   PostgreSQL .... localhost:5432  (native install)
+#   Mosquitto ..... localhost:1883  (existing Docker container)
+#   Ollama ........ localhost:11434
+#   Elmer Core .... localhost:8100
+#   Dashboard ..... localhost:8501
+#
+# No bridge networks or inter-compose networking required.
+# Port mappings in docker-compose.yml are ignored (services
+# bind directly to the host interface).
+#
+# ============================================================
+# FINDING EXISTING SERVICES
+# ============================================================
+#
+# List all Docker networks:
+#   docker network ls
+#
+# Find your existing Mosquitto container:
+#   docker ps --filter "ancestor=eclipse-mosquitto" \
+#     --format "table {{.ID}}\t{{.Names}}\t{{.Ports}}"
+#
+# Inspect a container's network mode:
+#   docker inspect <container_id> \
+#     --format '{{.HostConfig.NetworkMode}}'
+#
+# Find which compose project a container belongs to:
+#   docker inspect <container_id> \
+#     --format '{{index .Config.Labels "com.docker.compose.project"}}'
+#
+# ============================================================
+# ADDING PGVECTOR TO NATIVE POSTGRESQL
+# ============================================================
+#
+# Elmer uses pgvector for vector embeddings. Since PostgreSQL
+# runs natively (not in Docker), install the extension as a
+# system package:
+#
+#   # Check your PostgreSQL version:
+#   psql --version
+#
+#   # Install pgvector (adjust version number):
+#   sudo apt install postgresql-16-pgvector
+#
+#   # Enable in the elmer database:
+#   sudo -u postgres psql -d elmer \
+#     -c "CREATE EXTENSION IF NOT EXISTS vector;"
+#
+#   # Or run the full init script which handles this:
+#   bash scripts/init-db.sh
+#
+# ============================================================
+# IF YOU EVER NEED BRIDGE NETWORKING INSTEAD
+# ============================================================
+#
+# If you need container isolation or DNS-based service
+# discovery, replace network_mode: host in docker-compose.yml
+# with named networks:
+#
+#   networks:
+#     elmer-net:
+#       driver: bridge
+#     # Reference your existing compose network:
+#     existing-net:
+#       external: true
+#       name: <project>_default   # from `docker network ls`
+#
+# Then assign networks per service:
+#
+#   services:
+#     elmer-core:
+#       networks:
+#         - elmer-net
+#         - existing-net       # to reach Mosquitto by container name
+#       extra_hosts:
+#         - "host.docker.internal:host-gateway"   # to reach native Postgres
+#
+# NOTE: With bridge networking you must change POSTGRES_HOST
+# from localhost to 172.17.0.1 (Docker bridge IP) or use the
+# extra_hosts entry above with host.docker.internal.
+# MQTT_HOST would change to the Mosquitto container name.
+#
+# Host networking is simpler and recommended for this setup.
+#
+# ============================================================
+# EXAMPLE: Elmer-managed Postgres (not recommended)
+# ============================================================
+# If you ever want Elmer to manage its own PostgreSQL instead
+# of using the native install, add this to docker-compose.yml:
+#
+# services:
+#   elmer-postgres:
+#     image: pgvector/pgvector:pg16
+#     container_name: elmer-postgres
+#     network_mode: host                # binds to port 5433
+#     environment:
+#       POSTGRES_USER: ${POSTGRES_USER:-postgres}
+#       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+#       POSTGRES_DB: ${POSTGRES_DB:-elmer}
+#       PGPORT: "5433"                  # avoid conflict with native PG
+#     volumes:
+#       - elmer-pgdata:/var/lib/postgresql/data
+#     restart: unless-stopped
+#
+# volumes:
+#   elmer-pgdata:
+#
+# Then set POSTGRES_PORT=5433 in .env.
