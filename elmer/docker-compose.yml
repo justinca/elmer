@@ -13,12 +13,14 @@
 # Does NOT manage: PostgreSQL, Mosquitto, Ollama, or the Worker.
 # Worker runs on Windows — not included here.
 #
+# Environment:
+#   All services share a single .env at the repo root.
+#   Docker reads it via env_file: .env (relative to this file).
+#   For local dev: run scripts/sync-env.sh to symlink into packages.
+#
 # Quick start:
 #   cp .env.example .env   # then edit with your values
 #   make up                 # or: docker compose up -d --build
-#
-# Find your existing Mosquitto container:
-#   docker ps --filter "ancestor=eclipse-mosquitto"
 # ============================================================
 
 services:
@@ -36,6 +38,8 @@ services:
     env_file: .env
     volumes:
       - ./docs:/app/docs
+      - ./packages/agents/agent_definitions:/app/agent_definitions:ro
+      - ./scripts/agent-scripts:/app/agent-scripts:ro
     restart: unless-stopped
     healthcheck:
       test:
@@ -46,7 +50,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
   # --------------------------------------------------------
   # Dashboard — Streamlit web UI
@@ -60,9 +64,18 @@ services:
     network_mode: host
     env_file: .env
     environment:
-      # Ensure dashboard connects to Core via localhost (not 0.0.0.0)
       ELMER_CORE_HOST: localhost
     restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8501/')"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       elmer-core:
         condition: service_healthy
@@ -96,6 +109,10 @@ services:
     container_name: elmer-knowledge
     network_mode: host
     env_file: .env
+    environment:
+      ELMER_DOCS_PATH: /data/docs
+    volumes:
+      - ./docs:/data/docs:ro
     restart: unless-stopped
     depends_on:
       elmer-core:

@@ -33,6 +33,11 @@ class Settings(BaseSettings):
 
     # Telegram
     TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_CHAT_ID: str = ""  # Admin chat ID for agent notifications
+
+    # Agent executor
+    AGENT_MAX_CONCURRENT: int = 5  # Global max concurrent agent runs
+    AGENT_SCRIPTS_DIR: str = "/app/agent-scripts"
 
     # Knowledge base
     OBSIDIAN_VAULT_PATH: str = ""

@@ -1,0 +1,94 @@
+# =============================================================
+# Knowledge Curator Agent
+# =============================================================
+# Maintains the knowledge base quality. After new content is
+# ingested (transcriptions, docs, notes), this agent generates
+# summaries, tags, and identifies gaps.
+#
+# Triggers:
+#   - Event: runs after a new transcription is completed
+#   - Schedule: periodic knowledge base review every 6 hours
+#
+# To customize:
+#   - Adjust the schedule interval for more/less frequent reviews
+#   - Modify the system prompt for different curation priorities
+#   - Add output_channels to get reports in different places
+# =============================================================
+
+name: knowledge-curator
+display_name: Knowledge Curator
+
+description: >
+  Manages knowledge base quality and organization. Automatically
+  processes new transcriptions to extract key topics and tags.
+  Periodically reviews the knowledge base to identify gaps in
+  documentation and suggest improvements.
+
+model: llama3.1:8b
+
+system_prompt: >
+  You are the Knowledge Curator agent for the Elmer home lab.
+  Your job is to keep the knowledge base organized and useful.
+
+  When processing a new transcription:
+  - Extract the main topics discussed
+  - Generate 3-5 descriptive tags
+  - Write a 2-3 sentence summary
+  - Note any action items or follow-ups mentioned
+
+  When reviewing the knowledge base:
+  - Check if any topic areas are under-documented
+  - Look for outdated information that needs updating
+  - Identify content that could be better organized
+  - Suggest specific documentation improvements
+
+  Focus areas for this lab: amateur radio (W0ABE), home automation,
+  system administration, weather monitoring, network infrastructure.
+
+  Always be specific in your suggestions — say exactly what document
+  to create or update, not vague recommendations.
+
+tools:
+  - name: search_knowledge
+    description: Search across documents, notes, and transcriptions
+    config:
+      sources:
+        - docs
+        - notes
+        - transcripts
+
+  - name: query_database
+    description: Query knowledge base tables for statistics and gaps
+    config:
+      allowed_tables:
+        - elmer.documents
+        - elmer.notes
+        - elmer.transcriptions
+
+triggers:
+  - type: event
+    event_type: transcription_complete
+    config:
+      description: Process new transcriptions for tags and summaries
+
+  - type: schedule
+    interval_seconds: 21600
+    config:
+      description: Review knowledge base every 6 hours
+
+  - type: api
+    config:
+      description: Can be triggered manually via POST /agents/knowledge-curator/run
+
+output_channels:
+  - log
+  - mqtt
+
+config:
+  max_tags_per_item: 5
+  summary_max_words: 100
+  gap_analysis_depth: shallow
+
+enabled: true
+max_concurrent: 1
+timeout_seconds: 180

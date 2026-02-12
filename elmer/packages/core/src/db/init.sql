@@ -89,14 +89,52 @@ CREATE TABLE IF NOT EXISTS elmer.transcriptions (
 CREATE TABLE IF NOT EXISTS elmer.agent_definitions (
     id              SERIAL PRIMARY KEY,
     name            VARCHAR NOT NULL UNIQUE,
+    display_name    VARCHAR NOT NULL DEFAULT '',
     description     TEXT,
     system_prompt   TEXT,
+    model           VARCHAR NOT NULL DEFAULT 'llama3.1:8b',
     tools           JSONB,
+    triggers        JSONB,
+    output_channels JSONB,
     config          JSONB,
     enabled         BOOLEAN NOT NULL DEFAULT true,
+    max_concurrent  INTEGER NOT NULL DEFAULT 1,
+    timeout_seconds INTEGER NOT NULL DEFAULT 120,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Add columns if upgrading from Phase 1 schema.
+DO $$ BEGIN
+    ALTER TABLE elmer.agent_definitions ADD COLUMN IF NOT EXISTS display_name VARCHAR NOT NULL DEFAULT '';
+    ALTER TABLE elmer.agent_definitions ADD COLUMN IF NOT EXISTS model VARCHAR NOT NULL DEFAULT 'llama3.1:8b';
+    ALTER TABLE elmer.agent_definitions ADD COLUMN IF NOT EXISTS triggers JSONB;
+    ALTER TABLE elmer.agent_definitions ADD COLUMN IF NOT EXISTS output_channels JSONB;
+    ALTER TABLE elmer.agent_definitions ADD COLUMN IF NOT EXISTS max_concurrent INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE elmer.agent_definitions ADD COLUMN IF NOT EXISTS timeout_seconds INTEGER NOT NULL DEFAULT 120;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- -----------------------------------------------------------
+-- Agent runs — execution history for agent invocations
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS elmer.agent_runs (
+    id              SERIAL PRIMARY KEY,
+    agent_id        INTEGER NOT NULL REFERENCES elmer.agent_definitions(id) ON DELETE CASCADE,
+    trigger_type    VARCHAR NOT NULL,
+    trigger_data    JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status          VARCHAR NOT NULL DEFAULT 'pending',
+    input_data      JSONB NOT NULL DEFAULT '{}'::jsonb,
+    output_data     JSONB NOT NULL DEFAULT '{}'::jsonb,
+    started_at      TIMESTAMPTZ,
+    completed_at    TIMESTAMPTZ,
+    duration_seconds FLOAT,
+    error           TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_runs_agent_started
+    ON elmer.agent_runs (agent_id, started_at DESC);
 
 -- -----------------------------------------------------------
 -- Conversations — chat history tied to agents

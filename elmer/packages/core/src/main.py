@@ -9,9 +9,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routes import docs, health, knowledge, llm, nodes, notes, transcription
+from .routes import agents, chat, docs, health, knowledge, llm, nodes, notes, transcription
 from .services import autodoc, db, mqtt_service
-from .services.autodoc import SystemDocumentor, _periodic_generation
+from .services.autodoc import SystemDocumentor
+from .services.scheduler import create_scheduler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,11 +53,16 @@ async def lifespan(app: FastAPI):
     # Fire initial doc generation as a background task.
     asyncio.create_task(documentor.generate_all())
 
-    # Start periodic doc regeneration.
-    autodoc_stop = asyncio.Event()
-    autodoc_task = asyncio.create_task(
-        _periodic_generation(documentor, autodoc_stop, settings.AUTODOC_INTERVAL_HOURS)
-    )
+    # Start the unified scheduler (autodoc regen, docs ingestion, etc.).
+    scheduler = create_scheduler()
+    await scheduler.start()
+
+    # Sync agent definitions from YAML into the database.
+    try:
+        result = await agents.sync_agent_definitions("/app/agent_definitions")
+        logger.info("Agent definitions synced: %s", result)
+    except Exception:
+        logger.exception("Failed to sync agent definitions (non-fatal)")
 
     logger.info("Elmer Core ready — http://%s:%s", settings.ELMER_CORE_HOST, settings.ELMER_CORE_PORT)
 
@@ -65,12 +71,8 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Elmer Core shutting down...")
 
-    # Stop autodoc periodic task.
-    autodoc_stop.set()
-    try:
-        await asyncio.wait_for(autodoc_task, timeout=5.0)
-    except asyncio.TimeoutError:
-        autodoc_task.cancel()
+    # Stop the scheduler.
+    await scheduler.stop()
 
     # Signal MQTT loop to stop (run() handles offline publish + cleanup).
     mqtt_stop.set()
@@ -107,6 +109,8 @@ app.include_router(docs.router)
 app.include_router(knowledge.router)
 app.include_router(transcription.router)
 app.include_router(notes.router)
+app.include_router(chat.router)
+app.include_router(agents.router)
 
 
 if __name__ == "__main__":

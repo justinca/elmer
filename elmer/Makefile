@@ -1,4 +1,8 @@
-.PHONY: up down logs logs-core logs-dash build restart status test clean shell-core db-shell init-db
+.PHONY: up down logs logs-core logs-dash logs-knowledge logs-telegram logs-transcription \
+       build restart status test test-pipeline clean shell-core db-shell init-db \
+       sync-notes ingest-docs search chat transcribe sync-env
+
+CORE_URL ?= http://localhost:8100
 
 # ── Lifecycle ────────────────────────────────────────────────
 
@@ -25,6 +29,15 @@ logs-core:
 logs-dash:
 	docker compose logs -f elmer-dashboard
 
+logs-knowledge:
+	docker compose logs -f elmer-knowledge
+
+logs-telegram:
+	docker compose logs -f elmer-telegram
+
+logs-transcription:
+	docker compose logs -f elmer-transcription
+
 # ── Status ───────────────────────────────────────────────────
 
 status:
@@ -40,6 +53,48 @@ test:
 	@echo ""
 	@echo "All tests passed."
 
+test-pipeline:
+	@echo "Running end-to-end knowledge pipeline tests..."
+	python scripts/test-knowledge-pipeline.py
+
+# ── Knowledge & RAG ──────────────────────────────────────────
+
+sync-notes:
+	@echo "Triggering Obsidian sync..."
+	@curl -s -X POST $(CORE_URL)/knowledge/ingest/directory \
+		-H 'Content-Type: application/json' \
+		-d '{"path":"/app/docs","source":"elmer-docs","patterns":["*.md"]}' | python -m json.tool
+
+ingest-docs:
+	@echo "Ingesting Elmer documentation..."
+	@curl -s -X POST $(CORE_URL)/knowledge/ingest/directory \
+		-H 'Content-Type: application/json' \
+		-d '{"path":"/app/docs","source":"elmer-docs","recursive":true,"patterns":["*.md"]}' | python -m json.tool
+
+search:
+ifndef Q
+	$(error Usage: make search Q="your query here")
+endif
+	@curl -s -X POST $(CORE_URL)/knowledge/search \
+		-H 'Content-Type: application/json' \
+		-d '{"query":"$(Q)","limit":5}' | python -m json.tool
+
+chat:
+ifndef M
+	$(error Usage: make chat M="your message here")
+endif
+	@curl -s -X POST $(CORE_URL)/chat \
+		-H 'Content-Type: application/json' \
+		-d '{"message":"$(M)"}' | python -m json.tool
+
+transcribe:
+ifndef F
+	$(error Usage: make transcribe F="path/to/file.wav")
+endif
+	@echo "Uploading $(F) for transcription..."
+	@curl -s -X POST $(CORE_URL)/transcription/upload \
+		-F "file=@$(F)" | python -m json.tool
+
 # ── Database ─────────────────────────────────────────────────
 
 init-db:
@@ -47,6 +102,11 @@ init-db:
 
 db-shell:
 	psql -h 127.0.0.1 -U postgres -d elmer
+
+# ── Environment ──────────────────────────────────────────────
+
+sync-env:
+	@bash scripts/sync-env.sh
 
 # ── Shells ───────────────────────────────────────────────────
 

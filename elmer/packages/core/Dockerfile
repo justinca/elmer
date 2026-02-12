@@ -4,10 +4,14 @@ WORKDIR /app
 
 # Copy package sources.
 COPY packages/common/ /app/packages/common/
+COPY packages/agents/ /app/packages/agents/
 COPY packages/core/ /app/packages/core/
 
-# Install common first (core depends on it), then core.
-RUN pip install --no-cache-dir /app/packages/common/ /app/packages/core/
+# Copy agent definitions (YAML) for startup sync.
+COPY packages/agents/agent_definitions/ /app/agent_definitions/
+
+# Install common, agents, then core.
+RUN pip install --no-cache-dir /app/packages/common/ /app/packages/agents/ /app/packages/core/
 
 EXPOSE 8100
 

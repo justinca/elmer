@@ -1,0 +1,96 @@
+# =============================================================
+# System Monitor Agent
+# =============================================================
+# Watches node health and sends alerts when things go wrong.
+# Provides a daily system health summary.
+#
+# Triggers:
+#   - MQTT heartbeats: reacts to missed heartbeats / node status
+#   - Schedule: 5-minute health check + daily 8am summary
+#
+# To customize:
+#   - Adjust alert_after_seconds for faster/slower alerting
+#   - Change summary_cron for different summary schedule
+#   - Add/remove output_channels as needed
+# =============================================================
+
+name: system-monitor
+display_name: System Monitor
+
+description: >
+  Monitors node health across the Elmer network. Sends alerts when
+  nodes go offline or degrade, and produces a daily health summary
+  at 8am with uptime stats and any issues detected overnight.
+
+model: llama3.1:8b
+
+system_prompt: >
+  You are the System Monitor agent for the Elmer home lab network.
+  Your job is to watch system health and report issues clearly.
+
+  When a node goes offline or becomes unreachable:
+  - State which node is affected and when it was last seen
+  - Suggest likely causes (network issue, service crash, power)
+  - Recommend specific troubleshooting steps
+
+  For daily summaries:
+  - List all nodes with current status and uptime
+  - Highlight any issues from the past 24 hours
+  - Note any concerning trends (high CPU, low disk, etc.)
+  - Keep it concise — bullet points, not paragraphs
+
+  Nodes in the network: NUC (hub), Windows Worker (GPU),
+  ShackPi (radio), WeatherPi (sensors).
+
+tools:
+  - name: query_database
+    description: Query the elmer.events and elmer.nodes tables for health data
+    config:
+      allowed_tables:
+        - elmer.events
+        - elmer.nodes
+
+  - name: send_telegram
+    description: Send alert messages to the admin via Telegram
+    config:
+      priority: high
+
+  - name: publish_mqtt
+    description: Publish health status updates to MQTT
+    config:
+      topic: elmer/agents/system-monitor/output
+
+triggers:
+  - type: mqtt
+    topic: "elmer/+/heartbeat"
+    config:
+      description: React to all node heartbeats
+
+  - type: schedule
+    interval_seconds: 300
+    config:
+      description: Check for stale/offline nodes every 5 minutes
+
+  - type: schedule
+    cron: "0 8 * * *"
+    config:
+      description: Daily health summary at 8am
+
+  - type: event
+    event_type: node_offline
+    config:
+      description: Immediate alert when a node goes offline
+
+output_channels:
+  - telegram
+  - mqtt
+  - log
+
+config:
+  alert_after_seconds: 300
+  summary_cron: "0 8 * * *"
+  include_metrics: true
+
+enabled: true
+max_concurrent: 1
+timeout_seconds: 60
