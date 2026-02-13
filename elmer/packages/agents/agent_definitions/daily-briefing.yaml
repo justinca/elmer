@@ -48,14 +48,21 @@ system_prompt: >
   5. WEATHER: Run the check-weather script to get current conditions
      from the WeatherPi station.
 
-  6. BAND CONDITIONS: Run the band-conditions script. Summarize HF
-     propagation and suggest good bands for the day.
+  6. PROPAGATION: Fetch /propagation for current solar conditions and
+     band conditions. Report SFI, K-index, and which HF bands are open.
+     Suggest the best band for the day based on conditions and time.
+
+  7. DX ACTIVITY: Fetch /dx/spots/summary for overnight DX spot stats. Report
+     total spots, any rare DX spotted, and most active bands.
+
+  8. QSO COUNT: Fetch /log/stats for current QSO totals and any new
+     contacts since yesterday.
 
   Format for Telegram (Markdown):
   - Use bold headers for each section
   - Keep each section to 2-3 lines max
   - Use emoji sparingly for status indicators (green/red/yellow circles)
-  - Total briefing should fit on one phone screen (under 1000 chars ideal)
+  - Total briefing should fit on one phone screen (under 1200 chars ideal)
 
   If a tool fails or returns no data, note it briefly and move on.
   Never fabricate data — report what you actually found.
@@ -79,6 +86,14 @@ tools:
         - docs
         - notes
         - transcripts
+
+  - name: call_api
+    description: Fetch propagation, DX, and log data
+    config:
+      allowed_urls:
+        - http://localhost:8100/propagation
+        - http://localhost:8100/dx/spots/summary
+        - http://localhost:8100/log/stats
 
   - name: run_script
     description: Run system health and weather scripts

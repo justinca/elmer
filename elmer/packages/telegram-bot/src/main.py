@@ -48,6 +48,20 @@ from .handlers.agents import (
     cmd_schedule,
     handle_agent_callback,
 )
+from .handlers.radio import (
+    cmd_bands,
+    cmd_contest,
+    cmd_dx,
+    cmd_dxcc,
+    cmd_log,
+    cmd_need,
+    cmd_needs,
+    cmd_plan,
+    cmd_pota,
+    cmd_prop,
+    cmd_solar,
+    cmd_spots,
+)
 from .handlers.notifications import NotificationManager
 from .handlers.transcription import (
     cmd_transcript,
@@ -97,16 +111,16 @@ async def post_init(application: Application) -> None:
 
     # Set command menu for Telegram UI.
     await application.bot.set_my_commands([
+        BotCommand("prop", "Propagation summary"),
+        BotCommand("bands", "Band conditions grid"),
+        BotCommand("solar", "Solar indices"),
+        BotCommand("spots", "DX spots [band] [mode]"),
+        BotCommand("pota", "POTA spots or park info"),
+        BotCommand("dxcc", "DXCC award progress"),
+        BotCommand("contest", "Upcoming contests"),
         BotCommand("status", "System status summary"),
-        BotCommand("nodes", "List all nodes"),
-        BotCommand("search", "Search knowledge base"),
-        BotCommand("sources", "Knowledge sources"),
-        BotCommand("transcripts", "Recent transcriptions"),
-        BotCommand("newchat", "Start fresh conversation"),
-        BotCommand("models", "List available LLM models"),
         BotCommand("agents", "List all agents"),
-        BotCommand("runs", "Recent agent runs"),
-        BotCommand("schedule", "Scheduled agent jobs"),
+        BotCommand("search", "Search knowledge base"),
         BotCommand("help", "All commands"),
     ])
 
@@ -196,6 +210,19 @@ def main() -> None:
         "disable": cmd_disable,
         "runs": cmd_runs,
         "schedule": cmd_schedule,
+        # Radio.
+        "prop": cmd_prop,
+        "bands": cmd_bands,
+        "solar": cmd_solar,
+        "spots": cmd_spots,
+        "dx": cmd_dx,
+        "needs": cmd_needs,
+        "need": cmd_need,
+        "pota": cmd_pota,
+        "plan": cmd_plan,
+        "log": cmd_log,
+        "dxcc": cmd_dxcc,
+        "contest": cmd_contest,
     }
     for name, handler_fn in commands.items():
         app.add_handler(CommandHandler(name, handler_fn, filters=user_filter))

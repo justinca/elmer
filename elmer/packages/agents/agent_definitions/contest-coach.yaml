@@ -1,0 +1,96 @@
+# =============================================================
+# Contest Coach Agent
+# =============================================================
+# Real-time contest coaching for W0ABE. Monitors active contest
+# QSOs, reports rate/multipliers/score, and suggests band changes
+# based on propagation conditions.
+#
+# Triggers:
+#   - Schedule: every 30 minutes (interval)
+#   - API: on-demand via POST /agents/contest-coach/run
+#
+# IMPORTANT: Disabled by default. Enable before a contest via
+# the Agents dashboard page or PATCH /agents/contest-coach.
+# =============================================================
+
+name: contest-coach
+display_name: Contest Coach
+
+description: >
+  Real-time contest coaching agent for W0ABE. Checks for active
+  contest QSOs, reports rate, multipliers, and estimated score,
+  and suggests band changes based on current propagation conditions.
+  Only sends alerts when contest activity is detected.
+
+model: llama3.1:8b
+
+system_prompt: >
+  You are Elmer's contest coaching agent for W0ABE. You check for
+  active contest participation and provide real-time coaching.
+
+  Every 30 minutes during a contest:
+
+  1. Check for recent contest QSOs (last hour). If no contest activity
+     is detected, do NOT send any message — just log "no activity" and
+     stop.
+
+  2. If contest activity is found, compile a brief status update:
+     - Current QSO count and rate (QSOs/hour for last 10 and 60 min)
+     - Unique multipliers (countries, zones, or sections depending on contest)
+     - Estimated score
+     - Current band and mode
+
+  3. Check propagation conditions and recommend a band change if another
+     band has significantly better conditions. Only suggest a change if
+     there's a clear advantage — frequent band changes waste time.
+
+  4. Provide one brief tactical tip if relevant:
+     - "Rate dropping — consider calling CQ on a clear frequency"
+     - "Good opening on 15m — consider moving up"
+     - "Multiplier run: need VK/ZL on 20m, band is open"
+
+  Format for Telegram (Markdown):
+  - Keep under 500 chars total
+  - Lead with rate and score numbers
+  - Bold the band change suggestion if any
+  - Use short, actionable language
+
+  CRITICAL: Only message when contest activity is detected in the
+  last hour. Silent operation when no contest is active.
+
+tools:
+  - name: call_api
+    description: Fetch contest dashboard, band recommendations, and propagation
+    config:
+      allowed_urls:
+        - http://localhost:8100/contest/upcoming
+        - http://localhost:8100/contest/history
+        - http://localhost:8100/contest/recommend-band
+        - http://localhost:8100/log/contests
+        - http://localhost:8100/propagation/bands
+        - http://localhost:8100/propagation/solar
+
+  - name: send_telegram
+    description: Send contest coaching update to operator
+    config: {}
+
+triggers:
+  - type: schedule
+    interval_seconds: 1800
+    config:
+      description: Check contest activity every 30 minutes
+
+  - type: api
+    config:
+      description: On-demand via POST /agents/contest-coach/run
+
+output_channels:
+  - telegram
+  - dashboard
+  - log
+
+config: {}
+
+enabled: false
+max_concurrent: 1
+timeout_seconds: 120

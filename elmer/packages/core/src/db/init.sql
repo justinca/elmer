@@ -149,6 +149,70 @@ CREATE TABLE IF NOT EXISTS elmer.conversations (
 );
 
 -- -----------------------------------------------------------
+-- Propagation data — solar/band condition snapshots
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS elmer.propagation_data (
+    id              SERIAL PRIMARY KEY,
+    timestamp       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    solar_flux      REAL,
+    sunspot_number  INTEGER,
+    a_index         INTEGER,
+    k_index         REAL,
+    x_ray_flux      VARCHAR,
+    geomag_storm    VARCHAR,
+    band_conditions JSONB,
+    raw_data        JSONB,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_propagation_data_timestamp
+    ON elmer.propagation_data (timestamp DESC);
+
+-- -----------------------------------------------------------
+-- DX spots — cluster spot data
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS elmer.dx_spots (
+    id              SERIAL PRIMARY KEY,
+    timestamp       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    spotter         VARCHAR NOT NULL,
+    dx_call         VARCHAR NOT NULL,
+    frequency       REAL NOT NULL,
+    band            VARCHAR,
+    mode            VARCHAR,
+    comment         TEXT,
+    dx_entity       VARCHAR,
+    raw_spot        TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_dx_spots_timestamp
+    ON elmer.dx_spots (timestamp DESC);
+
+CREATE INDEX IF NOT EXISTS idx_dx_spots_dx_call
+    ON elmer.dx_spots (dx_call, timestamp DESC);
+
+CREATE INDEX IF NOT EXISTS idx_dx_spots_band
+    ON elmer.dx_spots (band, timestamp DESC);
+
+-- -----------------------------------------------------------
+-- Needs list — DXCC entities/bands/modes still needed
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS elmer.needs_list (
+    id              SERIAL PRIMARY KEY,
+    entity          VARCHAR NOT NULL,
+    band            VARCHAR,
+    mode            VARCHAR,
+    priority        INTEGER NOT NULL DEFAULT 5,
+    notes           TEXT,
+    needed          BOOLEAN NOT NULL DEFAULT true,
+    confirmed_at    TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_needs_list_entity
+    ON elmer.needs_list (entity) WHERE needed = true;
+
+-- -----------------------------------------------------------
 -- Notes — Obsidian/markdown notes with embeddings
 -- -----------------------------------------------------------
 -- Embedding dimension: 768 (nomic-embed-text via Ollama).

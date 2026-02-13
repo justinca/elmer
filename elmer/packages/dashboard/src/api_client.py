@@ -20,10 +20,11 @@ class ElmerAPI:
     def __init__(self, base_url: str = CORE_BASE_URL):
         self.base_url = base_url
 
-    def _get(self, path: str, params: dict | None = None) -> dict | None:
+    def _get(self, path: str, params: dict | None = None,
+             timeout: float | None = None) -> dict | None:
         """Issue a GET request and return the JSON body, or None on error."""
         try:
-            with httpx.Client(timeout=_TIMEOUT) as client:
+            with httpx.Client(timeout=timeout or _TIMEOUT) as client:
                 resp = client.get(f"{self.base_url}{path}", params=params)
                 resp.raise_for_status()
                 return resp.json()
@@ -469,3 +470,73 @@ class ElmerAPI:
     def check_log_needs(self) -> dict[str, Any] | None:
         """POST /log/needs-check -- cross-reference needs vs log."""
         return self._post("/log/needs-check", timeout=_LONG_TIMEOUT)
+
+    # -- POTA ---------------------------------------------------------------
+
+    def get_pota_nearby_parks(
+        self, grid: str | None = None, radius: float = 50.0,
+    ) -> list[dict[str, Any]]:
+        """GET /pota/parks/nearby -- parks near a grid."""
+        params: dict[str, Any] = {"radius": radius}
+        if grid:
+            params["grid"] = grid
+        data = self._get("/pota/parks/nearby", params=params, timeout=30.0)
+        return data if isinstance(data, list) else []
+
+    def search_pota_parks(
+        self, state: str | None = None, name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """GET /pota/parks/search -- search parks."""
+        params: dict[str, Any] = {}
+        if state:
+            params["state"] = state
+        if name:
+            params["name"] = name
+        data = self._get("/pota/parks/search", params=params, timeout=30.0)
+        return data if isinstance(data, list) else []
+
+    def get_pota_park(self, park_id: str) -> dict[str, Any] | None:
+        """GET /pota/park/{id} -- park details."""
+        return self._get(f"/pota/park/{park_id}", timeout=15.0)
+
+    def get_pota_spots(self) -> list[dict[str, Any]]:
+        """GET /pota/spots -- current activator spots."""
+        data = self._get("/pota/spots", timeout=15.0)
+        return data if isinstance(data, list) else []
+
+    def get_pota_plan(self, park_id: str) -> dict[str, Any] | None:
+        """GET /pota/plan/{park_id} -- activation plan."""
+        return self._get(f"/pota/plan/{park_id}", timeout=30.0)
+
+    def get_pota_band_plan(self, park_id: str) -> dict[str, Any] | None:
+        """GET /pota/plan/{park_id}/bands -- band recommendations."""
+        return self._get(f"/pota/plan/{park_id}/bands", timeout=15.0)
+
+    # -- Contests -----------------------------------------------------------
+
+    def get_upcoming_contests(self, days: int = 30) -> list[dict[str, Any]]:
+        """GET /contest/upcoming -- upcoming contests."""
+        data = self._get("/contest/upcoming", params={"days": days})
+        return data if isinstance(data, list) else []
+
+    def get_contest_info(self, name: str) -> dict[str, Any] | None:
+        """GET /contest/{name} -- contest details."""
+        return self._get(f"/contest/{name}")
+
+    def get_contest_dashboard(self, name: str) -> dict[str, Any] | None:
+        """GET /contest/{name}/dashboard -- live contest dashboard."""
+        return self._get(f"/contest/{name}/dashboard", timeout=30.0)
+
+    def get_contest_history(self) -> list[dict[str, Any]]:
+        """GET /contest/history -- historical contest participation."""
+        data = self._get("/contest/history")
+        return data if isinstance(data, list) else []
+
+    def recommend_band(
+        self, current_band: str, contest: str | None = None,
+    ) -> dict[str, Any] | None:
+        """GET /contest/recommend-band -- band recommendation."""
+        params: dict[str, Any] = {"current_band": current_band}
+        if contest:
+            params["contest"] = contest
+        return self._get("/contest/recommend-band", params=params)

@@ -42,8 +42,30 @@ class Settings(BaseSettings):
     # Knowledge base
     OBSIDIAN_VAULT_PATH: str = ""
 
+    # DX Cluster
+    DX_CLUSTER_HOST: str = "dxc.ve7cc.net"
+    DX_CLUSTER_PORT: int = 23
+    DX_CLUSTER_CALLSIGN: str = "W0ABE"
+    DX_SPOT_RETENTION_HOURS: int = 24
+
+    # POTA
+    POTA_HOME_GRID: str = "DN70"
+    POTA_HOME_STATE: str = "US-CO"
+
     # Auto-documentation
     AUTODOC_INTERVAL_HOURS: float = 6.0
+
+    # Home Assistant
+    HA_URL: str = ""
+    HA_TOKEN: str = ""
+    HA_SYNC_INTERVAL: int = 300  # 5 minutes
+
+    # Meshtastic
+    MESHTASTIC_CHANNEL_TOPIC: str = "msh/US/2/json/CalvertCasa/#"
+    MESHTASTIC_SEND_TOPIC: str = "msh/US/2/json/mqtt/"
+    MESHTASTIC_NODE_ID: int = 2654877601
+    MESHTASTIC_IGNORE_FROM: str = "24040934"
+    MESHTASTIC_CHANNEL: int = 0
 
     @property
     def worker_base_url(self) -> str:

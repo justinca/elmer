@@ -1,0 +1,96 @@
+# =============================================================
+# POTA Advisor Agent
+# =============================================================
+# Saturday morning POTA briefing for W0ABE. Compiles propagation
+# outlook, nearby park suggestions, band/time planning, and
+# current activator spots into a concise Telegram message.
+#
+# Triggers:
+#   - Schedule: Saturday at 7am (cron: 0 7 * * 6)
+#   - API: on-demand via POST /agents/pota-advisor/run
+#
+# To customize:
+#   - Adjust cron schedule for your timezone
+#   - Change home_grid and radius_miles in config
+# =============================================================
+
+name: pota-advisor
+display_name: POTA Advisor
+
+description: >
+  Weekend POTA activation briefing agent for W0ABE. Checks propagation
+  conditions, finds nearby parks in northern Colorado, suggests optimal
+  bands and time windows, and reports current activator spots for
+  park-to-park contacts.
+
+model: llama3.1:8b
+
+system_prompt: >
+  You are Elmer's POTA activation advisor for W0ABE (grid DN70, northern
+  Colorado). Every Saturday morning, compile a concise POTA briefing.
+
+  Your briefing should include:
+
+  1. PROPAGATION OUTLOOK: Check current solar conditions and band
+     propagation. Summarize which HF bands are open and expected to
+     be good today.
+
+  2. RECOMMENDED PARKS: Find 3-5 nearby parks (within configured radius).
+     For each park, note the reference, name, distance, and number of
+     prior activations. Prefer parks with fewer activations for variety.
+
+  3. BAND & TIME PLAN: Based on propagation and time of day, suggest
+     which bands to operate on and when. For example: "Start on 40m CW
+     at 8am, move to 20m SSB by 10am when the band opens."
+
+  4. ACTIVE SPOTS: Check current POTA spots. Note any activators on
+     nearby parks (potential park-to-park contacts) and busy frequencies
+     to avoid.
+
+  5. QUICK TIPS: One or two practical tips — check the weather, bring
+     extra battery, remember the logging app, etc.
+
+  Format for Telegram (Markdown):
+  - Use bold headers for each section
+  - Keep each section to 2-4 lines
+  - Include park references (e.g. US-1228) for easy lookup
+  - Total briefing under 800 chars ideal
+
+  Never fabricate data — report what you actually found.
+
+tools:
+  - name: call_api
+    description: Fetch POTA park data, spots, and propagation conditions
+    config:
+      allowed_urls:
+        - http://localhost:8100/pota/parks/nearby
+        - http://localhost:8100/pota/spots
+        - http://localhost:8100/pota/plan
+        - http://localhost:8100/propagation/bands
+        - http://localhost:8100/propagation/solar
+
+  - name: send_telegram
+    description: Send POTA briefing to operator
+    config: {}
+
+triggers:
+  - type: schedule
+    cron: "0 7 * * 6"
+    config:
+      description: Saturday morning POTA briefing at 7am
+
+  - type: api
+    config:
+      description: On-demand via POST /agents/pota-advisor/run
+
+output_channels:
+  - telegram
+  - log
+
+config:
+  home_grid: "DN70"
+  radius_miles: 50
+
+enabled: true
+max_concurrent: 1
+timeout_seconds: 120

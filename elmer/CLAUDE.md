@@ -29,6 +29,19 @@
 - SSH from Docker: ~/.ssh mounted read-only for scripts that SSH to ShackPi/WeatherPi
 - Metrics: published to elmer/orchestrator/metrics every 60s via MQTT
 
+## Radio Intelligence (Phase 4)
+- Propagation: N0NBH scrape, 15-min cache, bands/forecast/history endpoints
+- DX Cluster: Worker connects telnet, proxied via Core /dx/* routes
+- Log4OM: Worker reads SQLite DB, proxied via Core /log/* routes
+- POTA: api.pota.app, /location/parks/{state} for nearby (not /park/locations/ — 403)
+- Park references: US-1228 format (not K-prefix)
+- Contests: Hardcoded major + WA7BNM scrape, live dashboard from Log4OM
+- Needs list: PostgreSQL, matched against DX spots, managed via dashboard or /need command
+- Dashboard pages: packages/dashboard/src/pages/ (propagation, dx_spots, log_analysis, pota, contest)
+- Telegram radio commands: /prop /bands /solar /spots /dx /needs /need /pota /plan /log /dxcc /contest
+- Radio agents: dx-spotter, pota-advisor, contest-coach (disabled), band-monitor (disabled)
+- Station: W0ABE, DN70, IC-7300, FT-DX10, FT-710 Field, DX Commander vertical
+
 ## Known Issues
 - OLLAMA_HOST env var is set system-wide on Windows to 0.0.0.0:11434
   so worker config uses ELMER_OLLAMA_HOST to avoid collision

@@ -1,0 +1,102 @@
+# =============================================================
+# Band Monitor Agent
+# =============================================================
+# Monitors HF band conditions during daylight hours and sends
+# Telegram alerts when significant band openings or closings
+# occur. Publishes status to MQTT for other agents.
+#
+# Triggers:
+#   - Schedule: every 30 minutes, 13Z-03Z (daylight in Colorado)
+#   - API: on-demand via POST /agents/band-monitor/run
+#
+# IMPORTANT: Disabled by default. Enable when you want band
+# monitoring via the Agents dashboard or PATCH /agents/band-monitor.
+# =============================================================
+
+name: band-monitor
+display_name: Band Monitor
+
+description: >
+  HF band condition monitor for W0ABE. Checks propagation conditions
+  every 30 minutes during daylight hours (13Z-03Z), detects band
+  openings and closings, and alerts via Telegram when notable changes
+  occur. Publishes band reports to MQTT for other agents.
+
+model: llama3.1:8b
+
+system_prompt: >
+  You are Elmer's band monitor agent for W0ABE (grid DN70, northern
+  Colorado). You check HF band conditions every 30 minutes and alert
+  the operator about significant changes.
+
+  Your workflow each cycle:
+
+  1. Fetch current propagation from /propagation. Note SFI, K-index,
+     and band conditions (day/night for each HF band).
+
+  2. Compare with the previous cycle's conditions (from your context).
+     Look for CHANGES — bands going from Poor to Good, or Good to Poor.
+
+  3. ONLY alert the operator if:
+     - A major band (20m, 15m, 10m) opens from Poor/Fair to Good
+     - The K-index rises above 4 (geomagnetic storm)
+     - A rare high-band opening occurs (10m, 6m going Good)
+     - Conditions significantly degrade (multiple bands dropping)
+
+  4. If conditions are stable and nothing notable changed, do NOT send
+     a Telegram message. Just log "conditions stable" and stop.
+
+  5. When you do alert, publish the band report to MQTT topic
+     elmer/radio/band-report for other agents to consume.
+
+  Format for Telegram (Markdown):
+  - Keep under 400 chars
+  - Lead with the key change (e.g. "10m just opened!")
+  - Include SFI and K-index
+  - List affected bands with condition emojis
+  - Suggest action if relevant ("Good time for 10m FT8")
+
+  CRITICAL: Be selective. Only alert on significant changes. The
+  operator does not want a message every 30 minutes.
+
+tools:
+  - name: call_api
+    description: Fetch current propagation and band conditions
+    config:
+      allowed_urls:
+        - http://localhost:8100/propagation
+        - http://localhost:8100/propagation/forecast
+        - http://localhost:8100/dx/summary
+
+  - name: send_telegram
+    description: Send band condition alert to operator
+    config: {}
+
+  - name: publish_mqtt
+    description: Publish band report for other agents
+    config:
+      allowed_topics:
+        - elmer/radio/band-report
+
+triggers:
+  - type: schedule
+    interval_seconds: 1800
+    config:
+      active_hours_utc: "13-03"
+      description: Check band conditions every 30 min during daylight (13Z-03Z)
+
+  - type: api
+    config:
+      description: On-demand via POST /agents/band-monitor/run
+
+output_channels:
+  - telegram
+  - log
+
+config:
+  home_grid: "DN70"
+  alert_threshold: "significant"
+
+enabled: false
+max_concurrent: 1
+timeout_seconds: 60

@@ -31,16 +31,20 @@ system_prompt: >
   part of the Elmer home lab system. You are an experienced Elmer
   (mentor) in the ham radio community.
 
-  Station details (from knowledge base):
+  Station details:
   - Callsign: W0ABE
-  - Location: check knowledge base for QTH details
-  - Equipment: check knowledge base for current station setup
+  - Grid: DN70 (northern Colorado)
+  - Radios: Icom IC-7300, Yaesu FT-DX10, Yaesu FT-710 Field
+  - Antenna: DX Commander (vertical, multi-band)
+  - Logging: Log4OM on Windows desktop
+  - Digital modes: WSJT-X, JS8Call via IC-7300
 
   Your expertise includes:
   - HF/VHF/UHF band conditions and propagation
   - Antenna design and modeling (EZNEC, wire antennas, verticals)
   - Digital modes (FT8, FT4, JS8Call, WSJT-X configuration)
   - Contest operation and logging
+  - POTA (Parks on the Air) activation planning
   - QSL practices and LoTW/eQSL
   - Raspberry Pi integration (AllStar, EchoLink)
   - SDR and software-defined radio setup
@@ -48,7 +52,8 @@ system_prompt: >
   When answering questions:
   - Be practical and specific to the station's setup when possible
   - Reference relevant notes from the knowledge base
-  - For band conditions, suggest specific frequencies and times
+  - For band conditions, call /propagation to get real-time data
+  - For POTA questions, call /pota endpoints for park info and spots
   - For technical questions, include formulas or calculations
   - Keep answers conversational but technically accurate
 
@@ -69,11 +74,21 @@ tools:
         - propagation
 
   - name: call_api
-    description: Call external APIs for band conditions and callsign lookup
+    description: Fetch propagation, POTA, DX, and log data from Elmer Core
     config:
-      endpoints:
-        band_conditions: "https://www.hamqth.com/dxc_activity.php"
-        solar_data: "https://www.hamqth.com/solarxml.php"
+      allowed_urls:
+        - http://localhost:8100/propagation
+        - http://localhost:8100/propagation/forecast
+        - http://localhost:8100/dx/spots
+        - http://localhost:8100/dx/summary
+        - http://localhost:8100/dx/needs
+        - http://localhost:8100/log/stats
+        - http://localhost:8100/log/dxcc
+        - http://localhost:8100/pota/spots
+        - http://localhost:8100/pota/parks/nearby
+        - http://localhost:8100/pota/park
+        - http://localhost:8100/contest/upcoming
+        - http://localhost:8100/contest/recommend-band
 
 triggers:
   - type: api

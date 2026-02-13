@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routes import agents, chat, docs, dx, health, knowledge, llm, log, nodes, notes, propagation, transcription
+from .routes import agents, chat, contest, docs, dx, health, homeassistant, knowledge, llm, log, meshtastic, nodes, notes, pota, propagation, transcription
 from .services import autodoc, db, mqtt_service
 from .services.autodoc import SystemDocumentor
 from .services.scheduler import create_scheduler
@@ -90,6 +90,16 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to populate needs list (non-fatal)")
 
+    # Start Meshtastic CalvertCasa responder (after MQTT is connected).
+    from .services.meshtastic import get_service as get_mesh_service
+
+    mesh_service = get_mesh_service()
+    try:
+        await mesh_service.start()
+        logger.info("Meshtastic responder started on %s", settings.MESHTASTIC_CHANNEL_TOPIC)
+    except Exception:
+        logger.exception("Failed to start Meshtastic responder (non-fatal)")
+
     logger.info("Elmer Core ready — http://%s:%s", settings.ELMER_CORE_HOST, settings.ELMER_CORE_PORT)
 
     yield
@@ -150,6 +160,10 @@ app.include_router(agents.router)
 app.include_router(propagation.router)
 app.include_router(dx.router)
 app.include_router(log.router)
+app.include_router(pota.router)
+app.include_router(contest.router)
+app.include_router(homeassistant.router)
+app.include_router(meshtastic.router)
 
 
 if __name__ == "__main__":

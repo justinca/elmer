@@ -1,7 +1,8 @@
 .PHONY: up down logs logs-core logs-dash logs-knowledge logs-telegram logs-transcription \
        build restart status test test-pipeline clean shell-core db-shell init-db \
        sync-notes ingest-docs search chat transcribe sync-env \
-       agents agent-run agent-logs agent-reload test-agents
+       agents agent-run agent-logs agent-reload test-agents \
+       prop spots dx pota dxcc test-radio
 
 CORE_URL ?= http://localhost:8100
 
@@ -118,6 +119,29 @@ agent-reload:
 
 test-agents:
 	@python3 scripts/test-agents.py
+
+# ── Radio Intelligence ──────────────────────────────────────
+
+prop:
+	@curl -s $(CORE_URL)/propagation | python3 -m json.tool
+
+spots:
+	@curl -s "$(CORE_URL)/dx/spots?limit=20" | python3 -m json.tool
+
+dx:
+ifndef C
+	$(error Usage: make dx C=JA1ABC)
+endif
+	@curl -s "$(CORE_URL)/dx/entities/$(C)" | python3 -m json.tool
+
+pota:
+	@curl -s $(CORE_URL)/pota/spots | python3 -m json.tool
+
+dxcc:
+	@curl -s $(CORE_URL)/log/dxcc | python3 -m json.tool
+
+test-radio:
+	@python3 scripts/test-radio.py
 
 # ── Database ─────────────────────────────────────────────────
 

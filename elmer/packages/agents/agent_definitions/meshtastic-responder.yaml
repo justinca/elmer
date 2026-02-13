@@ -1,46 +1,39 @@
 # =============================================================
 # Meshtastic Auto-Responder Agent
 # =============================================================
-# Receives incoming Meshtastic mesh radio messages via MQTT and
-# sends concise replies. Designed for LoRa's tight byte limits.
+# Backup/complement to the dedicated MeshtasticService in core.
+# The core service handles CalvertCasa messages directly via MQTT
+# and routes them through RAG chat. This agent definition exists
+# as a reference and for the agent registry.
 #
-# Triggers:
-#   - MQTT: meshtastic/received/# (all incoming messages)
-#   - Debounce: 30s per sender (per topic, since sender is in path)
-#
-# To customize:
-#   - Adjust debounce for chattier/quieter mesh networks
-#   - Change max_response_chars in config
-#   - Add call_api tool for live data (weather, band conditions)
+# Primary handling: packages/core/src/services/meshtastic.py
 # =============================================================
 
 name: meshtastic-responder
-display_name: Meshtastic Auto-Responder
+display_name: Meshtastic CalvertCasa Responder
 
 description: >
-  Responds to incoming Meshtastic mesh radio messages. Searches the
-  knowledge base for answers and replies with ultra-concise responses
-  that fit within LoRa's byte limits (under 200 bytes).
+  Responds to incoming Meshtastic mesh radio messages on the CalvertCasa
+  channel. Messages are handled by the dedicated MeshtasticService which
+  routes them through RAG chat (including Home Assistant data, propagation,
+  station notes). POTA self-spotting is supported as a special command.
 
 model: llama3.1:8b
 
 system_prompt: >
-  You respond to Meshtastic mesh radio messages for W0ABE's network.
+  You respond to Meshtastic mesh radio messages on the CalvertCasa channel.
 
   CRITICAL CONSTRAINTS:
   - Your response MUST be under 200 bytes (about 200 ASCII characters)
-  - Use plain text only — NO markdown, NO formatting, NO emojis
+  - Use plain text only — NO markdown, NO formatting, NO asterisks
   - Be extremely concise — telegraph style is fine
   - If you cannot answer briefly, say: "Ask via Telegram for details"
 
-  The incoming message payload will contain the sender and message text.
-  If the message is a question or request:
-  1. Search the knowledge base for relevant information
-  2. Compose a brief, helpful response
-  3. Publish the response to the meshtastic send topic
+  You have access to Home Assistant data (temperature, weather, doors,
+  climate zones), propagation conditions, DX spots, POTA data, and the
+  full knowledge base via RAG search.
 
-  If the message is just a greeting or status update, respond with
-  a brief acknowledgment. Do not respond to system/position messages.
+  Special command: "POTA <park> <freq> <mode>" submits a self-spot.
 
   You are W0ABE's station — sign responses with "de W0ABE" when
   appropriate for ham radio context.
@@ -53,20 +46,32 @@ tools:
         - docs
         - notes
 
+  - name: call_api
+    description: Fetch live data from Elmer APIs
+    config:
+      allowed_urls:
+        - http://localhost:8100/ha/summary
+        - http://localhost:8100/ha/state/
+        - http://localhost:8100/propagation
+        - http://localhost:8100/dx/spots/summary
+        - http://localhost:8100/pota/spots
+
   - name: publish_mqtt
     description: Send response back via Meshtastic MQTT bridge
     config:
-      topic: "elmer/meshtastic/send"
+      topic: "msh/US/2/json/mqtt/"
       allowed_prefixes:
         - "elmer/"
-        - "meshtastic/"
+        - "msh/"
 
 triggers:
   - type: mqtt
-    topic: "meshtastic/received/#"
+    topic: "msh/US/2/json/CalvertCasa/#"
     config:
-      debounce_seconds: 30
-      description: Respond to incoming Meshtastic messages (30s debounce per sender)
+      debounce_seconds: 10
+      payload_filter:
+        type: "text"
+      description: Respond to CalvertCasa Meshtastic messages (10s debounce)
 
   - type: api
     config:
@@ -79,7 +84,11 @@ output_channels:
 config:
   max_response_chars: 200
   callsign: "W0ABE"
+  channel_topic: "msh/US/2/json/CalvertCasa/#"
+  send_topic: "msh/US/2/json/mqtt/"
+  node_id: 2654877601
+  ignore_from: "24040934"
 
-enabled: true
+enabled: false  # Handled by dedicated MeshtasticService in core
 max_concurrent: 2
 timeout_seconds: 60

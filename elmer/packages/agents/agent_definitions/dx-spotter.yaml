@@ -1,0 +1,99 @@
+# =============================================================
+# DX Spotter Agent
+# =============================================================
+# Monitors DX cluster spots and alerts W0ABE about spots that
+# match the needs list.  Checks propagation conditions for the
+# spotted band before alerting.
+#
+# Triggers:
+#   - MQTT: elmer/dx/spot (debounce 60s per dx_call)
+#   - API: on-demand via POST /agents/dx-spotter/run
+#
+# Alert levels:
+#   Red    — rare/needed entity on needs list (priority 1-2)
+#   Yellow — notable entity on needs list (priority 3-4)
+#   Green  — routine/not on needs list (logged, not alerted)
+# =============================================================
+
+name: dx-spotter
+display_name: DX Spotter
+
+description: >
+  Smart DX alerting agent for W0ABE. Monitors DX cluster spots,
+  checks each spot against the DXCC needs list, evaluates current
+  propagation conditions for the band, and sends Telegram alerts
+  for rare and notable DX.
+
+model: llama3.1:8b
+
+system_prompt: >
+  You are Elmer's DX spotter agent for W0ABE. You receive DX cluster
+  spot data and decide whether to alert the operator.
+
+  For each spot you receive:
+  1. Check the needs list by querying the database for matching entities
+  2. Check current propagation for the spotted band using call_api
+  3. Rate the urgency:
+     - Red (rare/needed): entity is on needs list with priority 1-2
+     - Yellow (notable): entity is on needs list with priority 3-5
+     - Green (routine): not on needs list, or very common entity
+
+  ONLY send a Telegram alert for Red and Yellow spots. For Green,
+  do NOT alert — just respond with a brief log note.
+
+  When alerting via Telegram, format your message as:
+  [emoji] DX ALERT: [callsign] — [entity]
+  Freq: [frequency] kHz ([band] [mode])
+  Band conditions: [day/night condition for that band]
+  Need: [which need it satisfies]
+  Spotted by: [spotter]
+
+  Use these urgency emojis:
+  - Red: use the word RARE
+  - Yellow: use the word NOTABLE
+  - Green: do not alert
+
+  Keep messages concise — the operator needs to act fast on rare DX.
+  Never fabricate data. If you can't check propagation, just skip that.
+
+tools:
+  - name: query_database
+    description: Check needs list and recent spots for the DX callsign
+    config:
+      allowed_tables:
+        - elmer.needs_list
+        - elmer.dx_spots
+        - elmer.propagation_data
+
+  - name: call_api
+    description: Check current band propagation conditions
+    config:
+      allowed_urls:
+        - http://localhost:8100/propagation/bands
+        - http://localhost:8100/propagation/solar
+        - http://localhost:8100/dx/needs
+
+  - name: send_telegram
+    description: Send DX alert to operator
+    config: {}
+
+triggers:
+  - type: mqtt
+    topic: "elmer/dx/spot"
+    config:
+      debounce_seconds: 60
+      debounce_key: "dx_call"
+      description: Alert on each unique DX callsign (debounced 60s)
+
+  - type: api
+    config:
+      description: On-demand via POST /agents/dx-spotter/run
+
+output_channels:
+  - log
+
+config: {}
+
+enabled: true
+max_concurrent: 2
+timeout_seconds: 60

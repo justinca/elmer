@@ -248,11 +248,31 @@ async def _task_propagation_fetch() -> dict[str, Any]:
     }
 
 
+async def _task_contest_calendar() -> dict[str, Any]:
+    """Refresh the contest calendar cache from WA7BNM."""
+    from .contest import get_service
+
+    svc = get_service()
+    contests = await svc.get_upcoming_contests(days=60)
+    return {"upcoming_count": len(contests)}
+
+
 async def _task_log_sync() -> dict[str, Any]:
     """Sync QSO daily summaries into the knowledge base."""
     from .log_analyzer import sync_log_summaries
 
     return await sync_log_summaries()
+
+
+async def _task_ha_sync() -> dict[str, Any]:
+    """Sync Home Assistant entity states to the RAG knowledge base."""
+    from .homeassistant import get_service
+
+    svc = get_service()
+    if not svc.configured:
+        return {"status": "skipped", "reason": "HA not configured"}
+
+    return await svc.sync_to_knowledge_base()
 
 
 async def _task_autodoc_regen() -> dict[str, Any]:
@@ -390,6 +410,22 @@ def create_scheduler() -> Scheduler:
         func=_task_log_sync,
         interval_seconds=6 * 3600,
         run_on_startup=False,
+    ))
+
+    # Contest calendar refresh (weekly, runs on startup).
+    scheduler.add_task(ScheduledTask(
+        name="contest-calendar",
+        func=_task_contest_calendar,
+        interval_seconds=604800,  # 7 days
+        run_on_startup=True,
+    ))
+
+    # Home Assistant sync (default: every 5 minutes, runs on startup).
+    scheduler.add_task(ScheduledTask(
+        name="ha-sync",
+        func=_task_ha_sync,
+        interval_seconds=settings.HA_SYNC_INTERVAL,
+        run_on_startup=True,
     ))
 
     _scheduler = scheduler
