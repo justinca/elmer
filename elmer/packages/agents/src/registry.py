@@ -353,12 +353,17 @@ class AgentRegistry:
                     counts["registered"] += 1
                 else:
                     # Update if the YAML has changed (compare key fields).
+                    existing_tool_names = sorted(t.name for t in existing.tools)
+                    defn_tool_names = sorted(t.name for t in defn.tools)
                     changed = (
                         existing.display_name != defn.display_name
                         or existing.description != defn.description
                         or existing.system_prompt != defn.system_prompt
                         or existing.model != defn.model
                         or existing.timeout_seconds != defn.timeout_seconds
+                        or existing.output_channels != defn.output_channels
+                        or existing_tool_names != defn_tool_names
+                        or existing.max_concurrent != defn.max_concurrent
                     )
                     if changed:
                         await self.update(

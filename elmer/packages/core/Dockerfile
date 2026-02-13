@@ -2,6 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install system dependencies for agent scripts that use SSH.
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy package sources.
 COPY packages/common/ /app/packages/common/
 COPY packages/agents/ /app/packages/agents/

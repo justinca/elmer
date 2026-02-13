@@ -1,0 +1,106 @@
+# =============================================================
+# Daily Briefing Agent
+# =============================================================
+# Compiles a concise morning summary and sends it to Telegram.
+# Covers system health, overnight events, new content, weather,
+# and band conditions — designed for a quick phone read with
+# morning coffee.
+#
+# Triggers:
+#   - Schedule: daily at 7am (cron: 0 7 * * *)
+#   - API: on-demand via POST /agents/daily-briefing/run
+#
+# To customize:
+#   - Adjust cron schedule for your timezone/preference
+#   - Add/remove data sources in the system prompt
+#   - Change the model for more detailed or concise briefings
+# =============================================================
+
+name: daily-briefing
+display_name: Daily Briefing
+
+description: >
+  Morning briefing agent for W0ABE. Gathers system health, overnight
+  alerts, new knowledge base content, weather data, and band conditions,
+  then composes a concise Telegram summary for quick morning review.
+
+model: llama3.1:8b
+
+system_prompt: >
+  You are Elmer's daily briefing agent. Every morning, compile a concise
+  summary for W0ABE covering the home lab and radio station status.
+
+  Your briefing should include these sections (skip any section where
+  data is unavailable):
+
+  1. SYSTEM HEALTH: Run the system-report script to get node status.
+     Summarize which nodes are online/offline and any resource concerns.
+
+  2. OVERNIGHT EVENTS: Query the events table for anything that happened
+     since yesterday. Highlight failures, alerts, or unusual activity.
+
+  3. NEW CONTENT: Check for new notes, documents, or transcriptions added
+     yesterday. Briefly summarize what was added.
+
+  4. AGENT ACTIVITY: Check agent_runs for yesterday. Note which agents
+     ran, success/failure counts, and any errors.
+
+  5. WEATHER: Run the check-weather script to get current conditions
+     from the WeatherPi station.
+
+  6. BAND CONDITIONS: Run the band-conditions script. Summarize HF
+     propagation and suggest good bands for the day.
+
+  Format for Telegram (Markdown):
+  - Use bold headers for each section
+  - Keep each section to 2-3 lines max
+  - Use emoji sparingly for status indicators (green/red/yellow circles)
+  - Total briefing should fit on one phone screen (under 1000 chars ideal)
+
+  If a tool fails or returns no data, note it briefly and move on.
+  Never fabricate data — report what you actually found.
+
+tools:
+  - name: query_database
+    description: Query system events, agent runs, and content tables
+    config:
+      allowed_tables:
+        - elmer.events
+        - elmer.nodes
+        - elmer.agent_runs
+        - elmer.documents
+        - elmer.notes
+        - elmer.transcriptions
+
+  - name: search_knowledge
+    description: Search recent knowledge base additions
+    config:
+      sources:
+        - docs
+        - notes
+        - transcripts
+
+  - name: run_script
+    description: Run system health and weather scripts
+    config: {}
+
+triggers:
+  - type: schedule
+    cron: "0 7 * * *"
+    config:
+      description: Daily morning briefing at 7am
+
+  - type: api
+    config:
+      description: On-demand via POST /agents/daily-briefing/run
+
+output_channels:
+  - telegram
+  - log
+
+config:
+  timezone: "America/Denver"
+
+enabled: true
+max_concurrent: 1
+timeout_seconds: 180

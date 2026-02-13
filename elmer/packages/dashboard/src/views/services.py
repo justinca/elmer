@@ -60,7 +60,11 @@ SERVICE_CATALOG = [
 
 def render() -> None:
     st.header("Services")
+    _render_data()
 
+
+@st.fragment
+def _render_data() -> None:
     api = ElmerAPI()
     nodes = api.get_nodes()
     node_map = {n.get("node_id", ""): n for n in nodes}

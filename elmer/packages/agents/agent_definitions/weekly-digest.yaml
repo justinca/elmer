@@ -1,0 +1,117 @@
+# =============================================================
+# Weekly Digest Agent
+# =============================================================
+# Compiles a comprehensive weekly review every Sunday evening.
+# Analyzes system performance, agent activity, knowledge growth,
+# and identifies trends, recurring issues, and improvements.
+#
+# Triggers:
+#   - Schedule: Sunday at 6pm (cron: 0 18 * * 0)
+#   - API: on-demand via POST /agents/weekly-digest/run
+#
+# To customize:
+#   - Adjust cron for different day/time
+#   - Add tools for deeper analysis (run_script, call_api)
+#   - Modify system prompt to focus on specific areas
+# =============================================================
+
+name: weekly-digest
+display_name: Weekly Digest
+
+description: >
+  Weekly analytical summary for W0ABE. Reviews system uptime, agent
+  activity, knowledge base growth, and operational patterns from the
+  past week. Identifies trends, recurring issues, and suggests
+  improvements. Delivered every Sunday evening via Telegram.
+
+model: llama3.1:8b
+
+system_prompt: >
+  You compile a weekly digest for W0ABE's Elmer home lab. This is the
+  operator's weekly review — be analytical and thorough but organized.
+
+  Use the query_database tool to gather data for each section. Use
+  search_knowledge to find relevant context from the knowledge base.
+
+  YOUR REPORT SHOULD INCLUDE:
+
+  1. SYSTEM RELIABILITY
+     - Query elmer.nodes for uptime data over the past 7 days
+     - Note any nodes that had downtime, how long, and frequency
+     - Calculate approximate uptime percentage for each node
+
+  2. AGENT ACTIVITY
+     - Query elmer.agent_runs for the past 7 days
+     - Count total runs per agent, success vs failure rates
+     - Highlight any agents that failed repeatedly
+     - Note average execution duration per agent
+
+  3. KNOWLEDGE BASE GROWTH
+     - Query elmer.documents for new docs this week (created_at > 7 days ago)
+     - Query elmer.notes for new notes this week
+     - Query elmer.transcriptions for new transcriptions this week
+     - Summarize what new content was added
+
+  4. NOTABLE EVENTS
+     - Query elmer.events for significant events this week
+     - Group by type and identify patterns
+     - Highlight anything unusual or concerning
+
+  5. RECOMMENDATIONS
+     - Based on the data, suggest improvements
+     - Flag recurring issues that need attention
+     - Suggest agents that might need tuning
+     - Note any patterns worth investigating
+
+  FORMAT (Telegram Markdown):
+  - Use bold headers for each section
+  - Include specific numbers and percentages
+  - Keep each section to 3-5 bullet points
+  - End with 1-2 actionable recommendations
+  - Total report should be comprehensive but scannable
+
+  Use actual data from the database — do not fabricate statistics.
+  If a query fails, note the gap and move on.
+
+tools:
+  - name: query_database
+    description: Query all Elmer tables for weekly statistics
+    config:
+      allowed_tables:
+        - elmer.agent_runs
+        - elmer.agent_definitions
+        - elmer.events
+        - elmer.nodes
+        - elmer.documents
+        - elmer.notes
+        - elmer.transcriptions
+
+  - name: search_knowledge
+    description: Search knowledge base for context and recent additions
+    config:
+      sources:
+        - docs
+        - notes
+        - transcripts
+
+triggers:
+  - type: schedule
+    cron: "0 18 * * 0"
+    config:
+      description: Weekly digest every Sunday at 6pm
+
+  - type: api
+    config:
+      description: On-demand via POST /agents/weekly-digest/run
+
+output_channels:
+  - telegram
+  - mqtt
+  - log
+
+config:
+  lookback_days: 7
+
+enabled: true
+max_concurrent: 1
+timeout_seconds: 300

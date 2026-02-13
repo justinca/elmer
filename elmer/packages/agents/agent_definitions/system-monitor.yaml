@@ -63,13 +63,11 @@ tools:
 triggers:
   - type: mqtt
     topic: "elmer/+/heartbeat"
+    payload_filter:
+      status: "offline"
     config:
-      description: React to all node heartbeats
-
-  - type: schedule
-    interval_seconds: 300
-    config:
-      description: Check for stale/offline nodes every 5 minutes
+      debounce_seconds: 300
+      description: React to offline heartbeats (debounce 5 min)
 
   - type: schedule
     cron: "0 8 * * *"
@@ -82,7 +80,6 @@ triggers:
       description: Immediate alert when a node goes offline
 
 output_channels:
-  - telegram
   - mqtt
   - log
 

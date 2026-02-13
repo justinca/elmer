@@ -8,7 +8,11 @@ from api_client import ElmerAPI
 
 def render() -> None:
     st.header("Event Log")
+    _render_data()
 
+
+@st.fragment
+def _render_data() -> None:
     api = ElmerAPI()
 
     # -- Filters --------------------------------------------------------------

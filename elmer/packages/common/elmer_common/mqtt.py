@@ -173,6 +173,35 @@ class ElmerMQTTClient:
         if topic not in self.topics:
             self.topics.append(topic)
 
+    async def subscribe_late(self, topic: str, callback: MessageCallback) -> None:
+        """Register *callback* AND subscribe on the broker if already connected.
+
+        Use this for subscriptions added after :meth:`connect` has been
+        called.  If the client is not yet connected the topic will be
+        subscribed on the next (re)connect automatically.
+        """
+        self.subscribe(topic, callback)
+        if self._client is not None:
+            try:
+                await self._client.subscribe(topic)
+                logger.debug("Late-subscribed to %s", topic)
+            except aiomqtt.MqttError as exc:
+                logger.warning("Late subscribe to %s failed: %s", topic, exc)
+
+    def unsubscribe_callback(self, topic: str, callback: MessageCallback) -> None:
+        """Remove a specific *callback* from *topic* subscriptions.
+
+        Does NOT unsubscribe from the broker — the topic remains active
+        for other callbacks that may still be registered.
+        """
+        callbacks = self._subscriptions.get(topic, [])
+        try:
+            callbacks.remove(callback)
+        except ValueError:
+            pass
+        if not callbacks:
+            self._subscriptions.pop(topic, None)
+
     # ------------------------------------------------------------------
     # Internal — connection loop
     # ------------------------------------------------------------------

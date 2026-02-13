@@ -172,6 +172,15 @@ def _row_to_run(row) -> AgentRunResponse:
     )
 
 
+def _reload_agent_triggers(name: str) -> None:
+    """Tell the orchestrator to re-read an agent's triggers (fire-and-forget)."""
+    from ..services.orchestrator_service import get_orchestrator
+
+    orch = get_orchestrator()
+    if orch is not None:
+        asyncio.create_task(orch.reload_agent(name))
+
+
 # ---------------------------------------------------------------------------
 # YAML sync — called on startup from main.py
 # ---------------------------------------------------------------------------
@@ -209,7 +218,7 @@ async def sync_agent_definitions(definitions_dir: str | Path) -> dict[str, int]:
 
             # Check if agent already exists.
             existing = await db.fetch_one(
-                "SELECT id, system_prompt, description FROM elmer.agent_definitions WHERE name = $1",
+                "SELECT id, system_prompt, description, triggers FROM elmer.agent_definitions WHERE name = $1",
                 name,
             )
 
@@ -240,10 +249,12 @@ async def sync_agent_definitions(definitions_dir: str | Path) -> dict[str, int]:
                 counts["registered"] += 1
                 logger.info("Registered agent '%s' from %s", name, yaml_file.name)
             else:
-                # Update if definition changed.
+                # Update if definition changed (prompt, description, or triggers).
+                existing_triggers = _parse_json(existing.get("triggers")) or []
                 if (
                     (existing["system_prompt"] or "") != (data.get("system_prompt") or "")
                     or (existing["description"] or "") != (data.get("description") or "")
+                    or json.dumps(existing_triggers, sort_keys=True) != json.dumps(raw_triggers, sort_keys=True)
                 ):
                     await db.execute(
                         """
@@ -318,6 +329,89 @@ async def list_tools():
                 "parameters": instance.parameters_schema(),
             })
     return tools
+
+
+@router.get("/orchestrator/status")
+async def get_orchestrator_status():
+    """Return the orchestrator's current status."""
+    from ..services.orchestrator_service import get_orchestrator
+
+    orch = get_orchestrator()
+    if orch is None:
+        return {"running": False, "error": "Orchestrator not started"}
+    return orch.get_status()
+
+
+@router.post("/orchestrator/reload")
+async def reload_orchestrator():
+    """Reload all agent definitions and re-register triggers."""
+    from ..services.orchestrator_service import get_orchestrator
+
+    orch = get_orchestrator()
+    if orch is None:
+        raise HTTPException(status_code=503, detail="Orchestrator not running")
+    result = await orch.reload()
+    return {"reloaded": True, **result}
+
+
+@router.get("/schedule")
+async def list_scheduled_jobs():
+    """List all scheduled agent jobs with next fire time."""
+    from ..services.orchestrator_service import get_orchestrator
+
+    orch = get_orchestrator()
+    if orch is None:
+        return []
+    return orch._schedule_triggers.get_scheduled_jobs()
+
+
+@router.get("/runs", response_model=list[AgentRunSummary])
+async def list_all_runs(
+    limit: int = Query(default=50, le=200),
+    status: str | None = Query(default=None),
+    trigger_type: str | None = Query(default=None),
+):
+    """List recent runs across all agents."""
+    conditions = []
+    params: list[Any] = []
+    idx = 1
+
+    if status:
+        conditions.append(f"r.status = ${idx}")
+        params.append(status)
+        idx += 1
+    if trigger_type:
+        conditions.append(f"r.trigger_type = ${idx}")
+        params.append(trigger_type)
+        idx += 1
+
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    params.append(limit)
+
+    rows = await db.fetch_all(
+        f"""
+        SELECT r.id, d.name AS agent_name, r.trigger_type, r.status,
+               r.started_at, r.completed_at, r.duration_seconds
+        FROM elmer.agent_runs r
+        JOIN elmer.agent_definitions d ON d.id = r.agent_id
+        {where}
+        ORDER BY r.started_at DESC
+        LIMIT ${idx}
+        """,
+        *params,
+    )
+    return [
+        AgentRunSummary(
+            id=r["id"],
+            agent_name=r["agent_name"],
+            trigger_type=r["trigger_type"],
+            status=r["status"],
+            started_at=str(r["started_at"]) if r.get("started_at") else None,
+            completed_at=str(r["completed_at"]) if r.get("completed_at") else None,
+            duration_seconds=r.get("duration_seconds"),
+        )
+        for r in rows
+    ]
 
 
 @router.get("/{name}", response_model=AgentDefinitionResponse)
@@ -432,6 +526,10 @@ async def update_agent(name: str, request: AgentUpdateRequest):
     values.append(name)
     query = f"UPDATE elmer.agent_definitions SET {', '.join(set_parts)} WHERE name = ${idx} RETURNING *"
     row = await db.fetch_one(query, *values)
+
+    # Reload triggers in the orchestrator.
+    _reload_agent_triggers(name)
+
     return _row_to_response(row)
 
 
@@ -443,6 +541,7 @@ async def delete_agent(name: str):
     )
     if result.endswith("0"):
         raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
+    _reload_agent_triggers(name)
     return {"name": name, "deleted": True}
 
 
@@ -455,6 +554,7 @@ async def enable_agent(name: str):
     )
     if result.endswith("0"):
         raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
+    _reload_agent_triggers(name)
     return {"name": name, "enabled": True}
 
 
@@ -467,6 +567,7 @@ async def disable_agent(name: str):
     )
     if result.endswith("0"):
         raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
+    _reload_agent_triggers(name)
     return {"name": name, "enabled": False}
 
 

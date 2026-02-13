@@ -12,12 +12,14 @@ dependencies = [
     "pydantic>=2.0",
     "asyncpg>=0.29.0",
     "aiomqtt>=2.0",
+    "apscheduler>=3.10",
 ]
 
 [tool.setuptools]
 packages = [
     "elmer_agents",
     "elmer_agents.tools",
+    "elmer_agents.triggers",
 ]
 
 [tool.setuptools.package-dir]

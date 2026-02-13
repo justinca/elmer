@@ -1,6 +1,7 @@
 .PHONY: up down logs logs-core logs-dash logs-knowledge logs-telegram logs-transcription \
        build restart status test test-pipeline clean shell-core db-shell init-db \
-       sync-notes ingest-docs search chat transcribe sync-env
+       sync-notes ingest-docs search chat transcribe sync-env \
+       agents agent-run agent-logs agent-reload test-agents
 
 CORE_URL ?= http://localhost:8100
 
@@ -94,6 +95,29 @@ endif
 	@echo "Uploading $(F) for transcription..."
 	@curl -s -X POST $(CORE_URL)/transcription/upload \
 		-F "file=@$(F)" | python -m json.tool
+
+# ── Agents ───────────────────────────────────────────────────
+
+agents:
+	@curl -s $(CORE_URL)/agents | python3 -m json.tool
+
+agent-run:
+ifndef A
+	$(error Usage: make agent-run A=agent-name)
+endif
+	@curl -s -X POST $(CORE_URL)/agents/$(A)/run | python3 -m json.tool
+
+agent-logs:
+ifndef A
+	$(error Usage: make agent-logs A=agent-name)
+endif
+	@curl -s "$(CORE_URL)/agents/$(A)/runs?limit=10" | python3 -m json.tool
+
+agent-reload:
+	@curl -s -X POST $(CORE_URL)/agents/orchestrator/reload | python3 -m json.tool
+
+test-agents:
+	@python3 scripts/test-agents.py
 
 # ── Database ─────────────────────────────────────────────────
 

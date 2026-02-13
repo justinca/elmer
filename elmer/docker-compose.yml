@@ -40,6 +40,7 @@ services:
       - ./docs:/app/docs
       - ./packages/agents/agent_definitions:/app/agent_definitions:ro
       - ./scripts/agent-scripts:/app/agent-scripts:ro
+      - /home/justin/.ssh:/root/.ssh:ro
     restart: unless-stopped
     healthcheck:
       test:

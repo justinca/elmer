@@ -41,6 +41,16 @@ class ElmerAPI:
         except (httpx.RequestError, httpx.HTTPStatusError):
             return None
 
+    def _put(self, path: str, json: dict | None = None) -> dict | None:
+        """Issue a PUT request and return the JSON body, or None on error."""
+        try:
+            with httpx.Client(timeout=_TIMEOUT) as client:
+                resp = client.put(f"{self.base_url}{path}", json=json)
+                resp.raise_for_status()
+                return resp.json()
+        except (httpx.RequestError, httpx.HTTPStatusError):
+            return None
+
     def _delete(self, path: str) -> dict | None:
         """Issue a DELETE request and return the JSON body, or None on error."""
         try:
@@ -243,3 +253,80 @@ class ElmerAPI:
     def delete_conversation(self, cid: int) -> dict | None:
         """DELETE /chat/conversation/{id}."""
         return self._delete(f"/chat/conversation/{cid}")
+
+    # -- Agents ---------------------------------------------------------------
+
+    def list_agents(self, enabled_only: bool = False) -> list[dict[str, Any]]:
+        """GET /agents -- list all agent definitions."""
+        params = {"enabled_only": str(enabled_only).lower()} if enabled_only else None
+        data = self._get("/agents", params=params)
+        return data if isinstance(data, list) else []
+
+    def get_agent(self, name: str) -> dict | None:
+        """GET /agents/{name} -- single agent definition."""
+        return self._get(f"/agents/{name}")
+
+    def create_agent(self, payload: dict) -> dict | None:
+        """POST /agents -- create a new agent definition."""
+        return self._post("/agents", json=payload)
+
+    def update_agent(self, name: str, payload: dict) -> dict | None:
+        """PUT /agents/{name} -- update an agent definition."""
+        return self._put(f"/agents/{name}", json=payload)
+
+    def delete_agent(self, name: str) -> dict | None:
+        """DELETE /agents/{name}."""
+        return self._delete(f"/agents/{name}")
+
+    def enable_agent(self, name: str) -> dict | None:
+        """POST /agents/{name}/enable."""
+        return self._post(f"/agents/{name}/enable")
+
+    def disable_agent(self, name: str) -> dict | None:
+        """POST /agents/{name}/disable."""
+        return self._post(f"/agents/{name}/disable")
+
+    def trigger_agent_run(self, name: str, input_data: dict | None = None) -> dict | None:
+        """POST /agents/{name}/run -- manually trigger an agent run."""
+        payload = {"input": input_data} if input_data else {}
+        return self._post(f"/agents/{name}/run", json=payload, timeout=_LONG_TIMEOUT)
+
+    def list_agent_runs(self, name: str, limit: int = 20) -> list[dict[str, Any]]:
+        """GET /agents/{name}/runs -- recent runs for an agent."""
+        data = self._get(f"/agents/{name}/runs", params={"limit": limit})
+        return data if isinstance(data, list) else []
+
+    def list_all_runs(
+        self, limit: int = 50, status: str | None = None,
+        trigger_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """GET /agents/runs -- recent runs across all agents."""
+        params: dict[str, Any] = {"limit": limit}
+        if status:
+            params["status"] = status
+        if trigger_type:
+            params["trigger_type"] = trigger_type
+        data = self._get("/agents/runs", params=params)
+        return data if isinstance(data, list) else []
+
+    def get_agent_run(self, run_id: int) -> dict | None:
+        """GET /agents/runs/{run_id} -- details for a specific run."""
+        return self._get(f"/agents/runs/{run_id}")
+
+    def list_tools(self) -> list[dict[str, Any]]:
+        """GET /agents/tools -- available built-in tools."""
+        data = self._get("/agents/tools")
+        return data if isinstance(data, list) else []
+
+    def get_orchestrator_status(self) -> dict | None:
+        """GET /agents/orchestrator/status."""
+        return self._get("/agents/orchestrator/status")
+
+    def reload_orchestrator(self) -> dict | None:
+        """POST /agents/orchestrator/reload."""
+        return self._post("/agents/orchestrator/reload")
+
+    def get_schedule(self) -> list[dict[str, Any]]:
+        """GET /agents/schedule -- scheduled agent jobs."""
+        data = self._get("/agents/schedule")
+        return data if isinstance(data, list) else []

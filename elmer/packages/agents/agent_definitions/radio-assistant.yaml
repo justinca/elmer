@@ -81,11 +81,9 @@ triggers:
       description: On-demand via POST /agents/radio-assistant/run
 
   - type: mqtt
-    topic: "elmer/chat/request"
-    payload_filter:
-      agent: radio-assistant
+    topic: "elmer/chat/radio"
     config:
-      description: Respond to radio-specific chat requests
+      description: Respond to radio questions via MQTT
 
 output_channels:
   - telegram

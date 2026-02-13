@@ -1,0 +1,120 @@
+# =============================================================
+# Home Assistant Reactor Agent
+# =============================================================
+# Monitors Home Assistant state changes via MQTT and reacts to
+# significant events. Most state changes are silently ignored —
+# only security events, temperature extremes, and important
+# changes trigger notifications.
+#
+# Triggers:
+#   - MQTT: homeassistant/+/+/state (HA state changes)
+#   - API: on-demand via POST /agents/home-assistant-reactor/run
+#
+# To customize:
+#   - Edit entities_of_interest in config to monitor specific devices
+#   - Adjust temp thresholds in config
+#   - Add publish_mqtt actions to control HA devices
+#   - Change debounce for more/less responsive monitoring
+# =============================================================
+
+name: home-assistant-reactor
+display_name: Home Assistant Reactor
+
+description: >
+  Monitors Home Assistant state changes published to MQTT. Evaluates
+  each event for significance and sends Telegram alerts for security
+  events, temperature extremes, power issues, and other important
+  state changes. Most routine events are silently ignored.
+
+model: llama3.1:8b
+
+system_prompt: >
+  You monitor Home Assistant state changes for W0ABE's smart home.
+  State changes arrive via MQTT on homeassistant/+/+/state topics.
+
+  YOUR DECISION FRAMEWORK:
+  For each state change, decide: Is this worth alerting about?
+
+  ALWAYS ALERT (send Telegram):
+  - Security: door/window opened unexpectedly, motion detected in
+    unusual areas or times, alarm state changes
+  - Temperature: indoor temp above 85F or below 55F, outdoor temp
+    below 20F or above 100F
+  - Power: UPS on battery, power outage detected, low battery alerts
+  - System: HA itself going unavailable, critical automations failing
+
+  SOMETIMES ALERT (use judgment):
+  - Garage door left open for extended time
+  - Unusual device patterns (lights on at odd hours)
+  - Events that match knowledge base automation rules
+
+  NEVER ALERT:
+  - Routine light on/off, thermostat adjustments
+  - Normal temperature fluctuations within range
+  - Expected motion during normal hours
+  - Sensor updates with minor value changes
+
+  WHEN YOU ALERT:
+  - Keep it to one short sentence
+  - Include: what changed, the new state, why it matters
+  - Example: "Front door opened at 2:47 AM — unexpected at this hour"
+
+  The MQTT payload will contain the entity_id and state value.
+  Check the knowledge base for any documented automation preferences
+  or thresholds before deciding.
+
+  If you determine the event is not worth alerting, simply return
+  a brief log message like "Routine state change, no action needed."
+
+tools:
+  - name: search_knowledge
+    description: Check for automation rules and preferences
+    config:
+      sources:
+        - docs
+        - notes
+
+  - name: publish_mqtt
+    description: Publish commands to Home Assistant via MQTT
+    config:
+      topic: "elmer/homeassistant/command"
+      allowed_prefixes:
+        - "elmer/"
+        - "homeassistant/"
+
+  - name: send_telegram
+    description: Alert admin about important state changes
+    config: {}
+
+triggers:
+  - type: mqtt
+    topic: "homeassistant/+/+/state"
+    config:
+      debounce_seconds: 60
+      description: Monitor HA state changes (60s debounce per entity)
+
+  - type: api
+    config:
+      description: On-demand via POST /agents/home-assistant-reactor/run
+
+output_channels:
+  - log
+
+config:
+  # Entities of particular interest (agent can reference these).
+  entities_of_interest:
+    - binary_sensor.front_door
+    - binary_sensor.garage_door
+    - binary_sensor.motion_hallway
+    - sensor.indoor_temperature
+    - sensor.outdoor_temperature
+    - sensor.ups_status
+  # Temperature alert thresholds (Fahrenheit).
+  temp_high_indoor: 85
+  temp_low_indoor: 55
+  temp_high_outdoor: 100
+  temp_low_outdoor: 20
+
+enabled: true
+max_concurrent: 2
+timeout_seconds: 60

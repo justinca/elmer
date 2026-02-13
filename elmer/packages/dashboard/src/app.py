@@ -1,7 +1,7 @@
 """Elmer Dashboard — Main Streamlit application."""
 
 import streamlit as st
-import streamlit.components.v1 as components
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(
     page_title="Elmer Dashboard",
@@ -16,12 +16,11 @@ with st.sidebar:
     st.caption("Home Lab OS \u00b7 v0.1.0")
     st.divider()
 
-    st.caption("SYSTEM")
-    system_pages = ["System Status", "Services", "Event Log"]
-    st.caption("KNOWLEDGE")
-    knowledge_pages = ["Knowledge Base", "Notes", "Transcriptions", "Chat"]
-
-    all_pages = system_pages + knowledge_pages
+    all_pages = [
+        "System Status", "Services", "Event Log",
+        "Knowledge Base", "Notes", "Transcriptions", "Chat",
+        "Agents", "Agent Builder", "Agent Runs", "Orchestrator",
+    ]
     page = st.radio(
         "Navigation",
         all_pages,
@@ -30,8 +29,9 @@ with st.sidebar:
 
     st.divider()
 
-    # Auto-refresh (disable for Chat page to avoid losing input).
-    if page != "Chat":
+    # Auto-refresh (disable for Chat and builder pages to avoid losing input).
+    no_refresh_pages = {"Chat", "Agent Builder"}
+    if page not in no_refresh_pages:
         auto_refresh = st.toggle("Auto-refresh", value=True)
         refresh_interval = st.select_slider(
             "Interval (sec)",
@@ -42,14 +42,10 @@ with st.sidebar:
     else:
         auto_refresh = False
 
-# -- Auto-refresh via JS ------------------------------------------------------
+# -- Auto-refresh (uses st.rerun internally — no full page reload) -----------
 
 if auto_refresh:
-    components.html(
-        f"<script>setTimeout(function(){{window.parent.location.reload()}}"
-        f",{refresh_interval * 1000})</script>",
-        height=0,
-    )
+    st_autorefresh(interval=refresh_interval * 1000, key="auto_refresh")
 
 # -- Page router ---------------------------------------------------------------
 
@@ -79,4 +75,20 @@ elif page == "Transcriptions":
 
 elif page == "Chat":
     from views.chat import render
+    render()
+
+elif page == "Agents":
+    from views.agents import render
+    render()
+
+elif page == "Agent Builder":
+    from views.agent_builder import render
+    render()
+
+elif page == "Agent Runs":
+    from views.agent_runs import render
+    render()
+
+elif page == "Orchestrator":
+    from views.orchestrator import render
     render()

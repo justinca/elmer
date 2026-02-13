@@ -1,0 +1,85 @@
+# =============================================================
+# Meshtastic Auto-Responder Agent
+# =============================================================
+# Receives incoming Meshtastic mesh radio messages via MQTT and
+# sends concise replies. Designed for LoRa's tight byte limits.
+#
+# Triggers:
+#   - MQTT: meshtastic/received/# (all incoming messages)
+#   - Debounce: 30s per sender (per topic, since sender is in path)
+#
+# To customize:
+#   - Adjust debounce for chattier/quieter mesh networks
+#   - Change max_response_chars in config
+#   - Add call_api tool for live data (weather, band conditions)
+# =============================================================
+
+name: meshtastic-responder
+display_name: Meshtastic Auto-Responder
+
+description: >
+  Responds to incoming Meshtastic mesh radio messages. Searches the
+  knowledge base for answers and replies with ultra-concise responses
+  that fit within LoRa's byte limits (under 200 bytes).
+
+model: llama3.1:8b
+
+system_prompt: >
+  You respond to Meshtastic mesh radio messages for W0ABE's network.
+
+  CRITICAL CONSTRAINTS:
+  - Your response MUST be under 200 bytes (about 200 ASCII characters)
+  - Use plain text only — NO markdown, NO formatting, NO emojis
+  - Be extremely concise — telegraph style is fine
+  - If you cannot answer briefly, say: "Ask via Telegram for details"
+
+  The incoming message payload will contain the sender and message text.
+  If the message is a question or request:
+  1. Search the knowledge base for relevant information
+  2. Compose a brief, helpful response
+  3. Publish the response to the meshtastic send topic
+
+  If the message is just a greeting or status update, respond with
+  a brief acknowledgment. Do not respond to system/position messages.
+
+  You are W0ABE's station — sign responses with "de W0ABE" when
+  appropriate for ham radio context.
+
+tools:
+  - name: search_knowledge
+    description: Search knowledge base for answers to questions
+    config:
+      sources:
+        - docs
+        - notes
+
+  - name: publish_mqtt
+    description: Send response back via Meshtastic MQTT bridge
+    config:
+      topic: "elmer/meshtastic/send"
+      allowed_prefixes:
+        - "elmer/"
+        - "meshtastic/"
+
+triggers:
+  - type: mqtt
+    topic: "meshtastic/received/#"
+    config:
+      debounce_seconds: 30
+      description: Respond to incoming Meshtastic messages (30s debounce per sender)
+
+  - type: api
+    config:
+      description: On-demand via POST /agents/meshtastic-responder/run
+
+output_channels:
+  - mqtt
+  - log
+
+config:
+  max_response_chars: 200
+  callsign: "W0ABE"
+
+enabled: true
+max_concurrent: 2
+timeout_seconds: 60

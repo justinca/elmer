@@ -1,0 +1,111 @@
+# =============================================================
+# Node Watchdog Agent
+# =============================================================
+# Active diagnostic watchdog that monitors node health and takes
+# action when nodes go offline. More aggressive than system-monitor:
+# runs scripts for diagnostics, checks worker API, and escalates
+# prolonged outages.
+#
+# Triggers:
+#   - Event: node_offline (immediate response)
+#   - Schedule: every 5 minutes (proactive health poll)
+#   - API: on-demand via POST /agents/node-watchdog/run
+#
+# To customize:
+#   - Adjust interval_seconds for more/less frequent polling
+#   - Change escalation thresholds in the system prompt
+#   - Add run_script tools for node-specific diagnostics
+# =============================================================
+
+name: node-watchdog
+display_name: Node Watchdog
+
+description: >
+  Active node health watchdog for the Elmer network. Responds
+  immediately to node_offline events with diagnostic info, runs
+  periodic health checks, and escalates prolonged outages via
+  Telegram with troubleshooting details.
+
+model: llama3.1:8b
+
+system_prompt: >
+  You are the Node Watchdog for the Elmer network. Your job is to
+  actively monitor and diagnose node health issues.
+
+  NODES IN THE NETWORK:
+  - NUC (core): Hub running Elmer Core, Dashboard, Docker services
+  - Worker (windows): GPU machine running Ollama, Whisper at 192.168.1.226
+  - ShackPi (shackpi): Raspberry Pi running AllStar node
+  - WeatherPi (weatherpi): Raspberry Pi running weewx, Meshtastic
+
+  WHEN TRIGGERED BY node_offline EVENT:
+  1. Query the events table to confirm which node went offline and when
+  2. Run system-report.sh to check all nodes
+  3. Send an immediate Telegram alert with:
+     - Which node is down
+     - When it was last seen
+     - What services are affected
+     - Suggested troubleshooting steps
+
+  WHEN TRIGGERED BY SCHEDULE (every 5 min):
+  1. Query elmer.nodes for last_seen timestamps
+  2. If all nodes reported recently (< 5 min): do nothing, return silently
+  3. If a node hasn't reported in > 5 min: send alert via Telegram
+  4. If a node hasn't reported in > 30 min: send escalated alert
+     (mention it's been down for extended time, may need physical check)
+
+  IMPORTANT:
+  - Do NOT send "all clear" messages on routine checks
+  - Only alert when something is actually wrong
+  - Be concise — include node name, duration, affected services
+  - For the Worker, try the call_api tool to check its health endpoint
+
+tools:
+  - name: query_database
+    description: Query node health and event data
+    config:
+      allowed_tables:
+        - elmer.events
+        - elmer.nodes
+        - elmer.agent_runs
+
+  - name: send_telegram
+    description: Send alert notifications to admin
+    config: {}
+
+  - name: call_api
+    description: Check Worker health endpoint directly
+    config:
+      endpoints:
+        worker_health: "http://192.168.1.226:8101/health"
+
+  - name: run_script
+    description: Run system diagnostics scripts
+    config: {}
+
+triggers:
+  - type: event
+    event_type: node_offline
+    config:
+      description: Immediate response when a node goes offline
+
+  - type: schedule
+    interval_seconds: 300
+    config:
+      description: Health poll every 5 minutes
+
+  - type: api
+    config:
+      description: On-demand via POST /agents/node-watchdog/run
+
+output_channels:
+  - mqtt
+  - log
+
+config:
+  alert_threshold_seconds: 300
+  escalation_threshold_seconds: 1800
+
+enabled: true
+max_concurrent: 1
+timeout_seconds: 120

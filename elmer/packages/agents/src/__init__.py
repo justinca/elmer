@@ -2,6 +2,7 @@
 
 from .executor import AgentExecutor
 from .models import AgentDefinition, AgentRun, AgentTool, AgentTrigger
+from .orchestrator import AgentOrchestrator
 from .output_router import OutputRouter
 from .registry import AgentRegistry
 from .tool_registry import ToolRegistry, get_registry
@@ -9,6 +10,7 @@ from .tool_registry import ToolRegistry, get_registry
 __all__ = [
     "AgentDefinition",
     "AgentExecutor",
+    "AgentOrchestrator",
     "AgentRun",
     "AgentRegistry",
     "AgentTool",

@@ -17,7 +17,11 @@ STATUS_ICON = {
 
 def render() -> None:
     st.header("System Status")
+    _render_data()
 
+
+@st.fragment
+def _render_data() -> None:
     api = ElmerAPI()
     health = api.get_health()
     nodes = api.get_nodes()

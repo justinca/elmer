@@ -237,6 +237,17 @@ async def publish(topic: str, payload: Any) -> None:
         await _mqtt.publish(topic, payload)
 
 
+def get_client() -> ElmerMQTTClient | None:
+    """Return the shared MQTT client instance (for late subscription support)."""
+    return _mqtt
+
+
+async def subscribe_late(topic: str, callback: Any) -> None:
+    """Subscribe to a topic after the client is already connected."""
+    if _mqtt is not None:
+        await _mqtt.subscribe_late(topic, callback)
+
+
 def get_node_monitor():
     """Return the NodeMonitor instance (may be ``None`` before run())."""
     return _node_monitor

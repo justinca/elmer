@@ -1,6 +1,5 @@
 """Output router — routes agent output to configured channels."""
 
-import json
 import logging
 from typing import Any
 
@@ -10,6 +9,23 @@ logger = logging.getLogger("elmer.agents.output_router")
 
 _TELEGRAM_API = "https://api.telegram.org"
 _TELEGRAM_TIMEOUT = 15.0
+_TELEGRAM_MAX_LENGTH = 4096
+
+# Agent-specific display prefixes.
+_AGENT_ICONS: dict[str, str] = {
+    "daily-briefing": "\u2600\ufe0f",
+    "weekly-digest": "\U0001f4ca",
+    "node-watchdog": "\U0001f6a8",
+    "allstar-monitor": "\U0001f4e1",
+    "home-assistant-reactor": "\U0001f3e0",
+    "meshtastic-responder": "\U0001f4f6",
+    "knowledge-curator": "\U0001f4da",
+    "radio-assistant": "\U0001f4fb",
+    "system-monitor": "\U0001f5a5",
+}
+
+# Alert-type agents get a prominent header.
+_ALERT_AGENTS = {"node-watchdog", "home-assistant-reactor", "allstar-monitor"}
 
 
 class OutputRouter:
@@ -50,6 +66,20 @@ class OutputRouter:
         else:
             logger.warning("Unknown output channel: %s", channel)
 
+    def _format_telegram_message(
+        self, agent_name: str, response_text: str,
+    ) -> str:
+        """Format agent output for Telegram with per-agent styling."""
+        icon = _AGENT_ICONS.get(agent_name, "\U0001f916")
+        display_name = agent_name.replace("-", " ").title()
+
+        if agent_name in _ALERT_AGENTS:
+            header = f"{icon} *{display_name} Alert*"
+        else:
+            header = f"{icon} *{display_name}*"
+
+        return f"{header}\n\n{response_text}"
+
     async def _send_telegram(
         self,
         agent_name: str,
@@ -68,23 +98,53 @@ class OutputRouter:
         if not response_text:
             return
 
-        # Format message with agent header.
-        message = f"*{agent_name}*\n\n{response_text}"
+        message = self._format_telegram_message(agent_name, response_text)
 
-        # Truncate for Telegram's 4096-char limit.
-        if len(message) > 4000:
-            message = message[:3997] + "..."
+        # Split long messages into chunks for Telegram's 4096-char limit.
+        chunks = self._split_message(message, _TELEGRAM_MAX_LENGTH - 100)
 
         url = f"{_TELEGRAM_API}/bot{token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
-
         async with httpx.AsyncClient(timeout=_TELEGRAM_TIMEOUT) as client:
-            resp = await client.post(url, json=payload)
-            data = resp.json()
-            if not data.get("ok"):
-                # Retry without parse_mode if Markdown fails.
-                payload.pop("parse_mode", None)
-                await client.post(url, json=payload)
+            for chunk in chunks:
+                payload = {
+                    "chat_id": chat_id,
+                    "text": chunk,
+                    "parse_mode": "Markdown",
+                }
+                resp = await client.post(url, json=payload)
+                data = resp.json()
+                if not data.get("ok"):
+                    # Retry without parse_mode if Markdown fails.
+                    payload.pop("parse_mode", None)
+                    await client.post(url, json=payload)
+
+    @staticmethod
+    def _split_message(text: str, max_len: int) -> list[str]:
+        """Split text into chunks that fit within max_len."""
+        if len(text) <= max_len:
+            return [text]
+
+        chunks: list[str] = []
+        while text:
+            if len(text) <= max_len:
+                chunks.append(text)
+                break
+
+            # Try to split at a paragraph break.
+            split_at = text.rfind("\n\n", 0, max_len)
+            if split_at == -1:
+                # Fall back to line break.
+                split_at = text.rfind("\n", 0, max_len)
+            if split_at == -1:
+                # Fall back to space.
+                split_at = text.rfind(" ", 0, max_len)
+            if split_at == -1:
+                split_at = max_len
+
+            chunks.append(text[:split_at])
+            text = text[split_at:].lstrip("\n")
+
+        return chunks
 
     async def _send_mqtt(
         self,

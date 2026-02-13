@@ -10,6 +10,7 @@ import httpx
 from telegram import BotCommand, Update
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
     filters,
@@ -36,6 +37,16 @@ from .handlers.knowledge import (
     cmd_search,
     cmd_sources,
     cmd_sync,
+)
+from .handlers.agents import (
+    cmd_agent,
+    cmd_agents,
+    cmd_disable,
+    cmd_enable,
+    cmd_run,
+    cmd_runs,
+    cmd_schedule,
+    handle_agent_callback,
 )
 from .handlers.notifications import NotificationManager
 from .handlers.transcription import (
@@ -93,6 +104,9 @@ async def post_init(application: Application) -> None:
         BotCommand("transcripts", "Recent transcriptions"),
         BotCommand("newchat", "Start fresh conversation"),
         BotCommand("models", "List available LLM models"),
+        BotCommand("agents", "List all agents"),
+        BotCommand("runs", "Recent agent runs"),
+        BotCommand("schedule", "Scheduled agent jobs"),
         BotCommand("help", "All commands"),
     ])
 
@@ -174,6 +188,14 @@ def main() -> None:
         "tsearch": cmd_tsearch,
         # Notifications.
         "notifications": cmd_notifications,
+        # Agents.
+        "agents": cmd_agents,
+        "agent": cmd_agent,
+        "run": cmd_run,
+        "enable": cmd_enable,
+        "disable": cmd_disable,
+        "runs": cmd_runs,
+        "schedule": cmd_schedule,
     }
     for name, handler_fn in commands.items():
         app.add_handler(CommandHandler(name, handler_fn, filters=user_filter))
@@ -194,6 +216,12 @@ def main() -> None:
     app.add_handler(MessageHandler(
         filters.PHOTO & user_filter,
         handle_photo,
+    ))
+
+    # Inline keyboard callbacks for agent actions (authorized users only).
+    app.add_handler(CallbackQueryHandler(
+        handle_agent_callback,
+        pattern="^agent_",
     ))
 
     # Catch-all: reject unauthorized users with polite message.

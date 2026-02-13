@@ -1,0 +1,103 @@
+# =============================================================
+# AllStar Monitor Agent
+# =============================================================
+# Monitors the AllStar/Asterisk node running on ShackPi.
+# Checks service status, connected nodes, and recent activity.
+# Alerts only on status changes — no "all clear" spam.
+#
+# Triggers:
+#   - Schedule: every 10 minutes (status poll)
+#   - MQTT: elmer/shackpi/heartbeat (piggyback on heartbeat)
+#   - API: on-demand via POST /agents/allstar-monitor/run
+#
+# To customize:
+#   - Change the AllStar node number in check-allstar.sh
+#   - Adjust interval for more/less frequent checks
+#   - Add weekly summary schedule trigger for usage reports
+# =============================================================
+
+name: allstar-monitor
+display_name: AllStar Monitor
+
+description: >
+  Monitors the AllStar/Asterisk amateur radio link node running on
+  ShackPi. Periodically checks service status and connected nodes,
+  logs activity, and alerts via Telegram if AllStar goes down.
+
+model: llama3.1:8b
+
+system_prompt: >
+  You monitor the AllStar/Asterisk node on W0ABE's ShackPi
+  (Raspberry Pi at 192.168.1.65).
+
+  AllStar is an amateur radio linking system that connects repeaters
+  and simplex nodes over the internet using VoIP (Asterisk PBX).
+
+  WHEN TRIGGERED BY SCHEDULE (every 10 min):
+  1. Run check-allstar.sh to get current Asterisk status
+  2. Parse the output for:
+     - Is Asterisk running? (systemctl status)
+     - Active connections (rpt showvars output)
+     - Node uptime
+  3. If Asterisk is NOT running:
+     - Send a Telegram alert: "AllStar node down on ShackPi"
+     - Include the error output from the script
+  4. If Asterisk IS running and has connections:
+     - Log the connected node numbers (do NOT send Telegram)
+  5. If this is a recovery (was down, now running):
+     - Send a Telegram recovery notification
+
+  WHEN TRIGGERED BY ShackPi HEARTBEAT:
+  1. Only act if the heartbeat indicates the node just came back online
+  2. Run check-allstar.sh to verify AllStar started with the node
+  3. If AllStar is not running after node recovery, alert
+
+  IMPORTANT:
+  - Do NOT send Telegram for routine "everything is fine" checks
+  - Only alert on: service down, service recovery, unusual activity
+  - Track state changes, not absolute state
+  - Keep messages concise — this is a monitoring agent, not a reporter
+
+tools:
+  - name: run_script
+    description: Check AllStar node status via SSH to ShackPi
+    config: {}
+
+  - name: query_database
+    description: Query node events for ShackPi history
+    config:
+      allowed_tables:
+        - elmer.events
+        - elmer.nodes
+
+  - name: send_telegram
+    description: Alert admin when AllStar status changes
+    config: {}
+
+triggers:
+  - type: schedule
+    interval_seconds: 600
+    config:
+      description: Poll AllStar status every 10 minutes
+
+  - type: mqtt
+    topic: "elmer/shackpi/heartbeat"
+    config:
+      debounce_seconds: 600
+      description: React to ShackPi heartbeats (debounce matches poll interval)
+
+  - type: api
+    config:
+      description: On-demand via POST /agents/allstar-monitor/run
+
+output_channels:
+  - mqtt
+  - log
+
+config:
+  allstar_node: 1999
+  shackpi_host: "shackpi"
+
+enabled: true
+max_concurrent: 1
+timeout_seconds: 90

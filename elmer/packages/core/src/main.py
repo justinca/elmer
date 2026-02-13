@@ -64,12 +64,26 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to sync agent definitions (non-fatal)")
 
+    # Start the agent orchestrator (trigger system).
+    from .services.orchestrator_service import start_orchestrator, stop_orchestrator
+
+    orchestrator = None
+    try:
+        orchestrator = await start_orchestrator()
+        logger.info("Agent orchestrator started: %s", orchestrator.get_status())
+    except Exception:
+        logger.exception("Failed to start agent orchestrator (non-fatal)")
+
     logger.info("Elmer Core ready — http://%s:%s", settings.ELMER_CORE_HOST, settings.ELMER_CORE_PORT)
 
     yield
 
     # Shutdown
     logger.info("Elmer Core shutting down...")
+
+    # Stop the orchestrator first (finish running agents).
+    if orchestrator is not None:
+        await stop_orchestrator()
 
     # Stop the scheduler.
     await scheduler.stop()

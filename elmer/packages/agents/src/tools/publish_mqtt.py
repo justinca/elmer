@@ -36,9 +36,13 @@ class PublishMQTTTool(BaseTool):
         topic = arguments.get("topic") or default_topic
         payload_str = arguments.get("payload", "")
 
-        # Security: only allow elmer/ topic prefix.
-        if not topic.startswith("elmer/"):
-            return ToolResult(success=False, error="Topic must start with 'elmer/'")
+        # Security: validate topic against allowed prefixes.
+        allowed_prefixes = self.config.get("allowed_prefixes", ["elmer/"])
+        if not any(topic.startswith(p) for p in allowed_prefixes):
+            return ToolResult(
+                success=False,
+                error=f"Topic must start with one of: {', '.join(allowed_prefixes)}",
+            )
 
         # Try to parse as JSON, otherwise send as-is.
         try:
