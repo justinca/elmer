@@ -17,8 +17,8 @@ with st.sidebar:
     st.divider()
 
     all_pages = [
-        "System Status", "Services", "Event Log",
-        "Knowledge Base", "Notes", "Transcriptions", "Chat",
+        "System Status", "Services", "Propagation", "DX Cluster", "Logbook",
+        "Event Log", "Knowledge Base", "Notes", "Transcriptions", "Chat",
         "Agents", "Agent Builder", "Agent Runs", "Orchestrator",
     ]
     page = st.radio(
@@ -55,6 +55,18 @@ if page == "System Status":
 
 elif page == "Services":
     from views.services import render
+    render()
+
+elif page == "Propagation":
+    from views.propagation import render
+    render()
+
+elif page == "DX Cluster":
+    from views.dx_cluster import render
+    render()
+
+elif page == "Logbook":
+    from views.logbook import render
     render()
 
 elif page == "Event Log":

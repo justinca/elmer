@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routes import agents, chat, docs, health, knowledge, llm, nodes, notes, transcription
+from .routes import agents, chat, docs, dx, health, knowledge, llm, log, nodes, notes, propagation, transcription
 from .services import autodoc, db, mqtt_service
 from .services.autodoc import SystemDocumentor
 from .services.scheduler import create_scheduler
@@ -74,12 +74,34 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to start agent orchestrator (non-fatal)")
 
+    # Start DX cluster client and populate needs list.
+    from .services.dx_cluster import get_client as get_dx_client
+    from .services.needs_list import get_needs_list
+
+    dx_client = get_dx_client()
+    try:
+        await dx_client.connect()
+    except Exception:
+        logger.exception("Failed to start DX cluster client (non-fatal)")
+
+    try:
+        nl = get_needs_list()
+        await nl.populate_starter()
+    except Exception:
+        logger.exception("Failed to populate needs list (non-fatal)")
+
     logger.info("Elmer Core ready — http://%s:%s", settings.ELMER_CORE_HOST, settings.ELMER_CORE_PORT)
 
     yield
 
     # Shutdown
     logger.info("Elmer Core shutting down...")
+
+    # Stop DX cluster client.
+    try:
+        await dx_client.disconnect()
+    except Exception:
+        pass
 
     # Stop the orchestrator first (finish running agents).
     if orchestrator is not None:
@@ -125,6 +147,9 @@ app.include_router(transcription.router)
 app.include_router(notes.router)
 app.include_router(chat.router)
 app.include_router(agents.router)
+app.include_router(propagation.router)
+app.include_router(dx.router)
+app.include_router(log.router)
 
 
 if __name__ == "__main__":

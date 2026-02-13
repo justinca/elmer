@@ -17,7 +17,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routes import health, llm, obsidian, transcribe
+from .routes import health, llm, log4om, obsidian, transcribe
 from .services import gpu_monitor
 
 logging.basicConfig(
@@ -137,6 +137,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(llm.router, prefix="/llm", tags=["llm"])
 app.include_router(transcribe.router, prefix="/transcribe", tags=["transcribe"])
+app.include_router(log4om.router, prefix="/log4om", tags=["log4om"])
 app.include_router(obsidian.router, prefix="/obsidian", tags=["obsidian"])
 
 

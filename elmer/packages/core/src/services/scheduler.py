@@ -205,6 +205,56 @@ async def _task_ingest_docs() -> dict[str, Any]:
     return {"ingested": ingested, "skipped": skipped, "errors": errors}
 
 
+async def _task_dx_spot_summary() -> dict[str, Any]:
+    """Publish DX spot summary and prune old spots."""
+    from .dx_cluster import get_client
+
+    client = get_client()
+    status = client.get_status()
+
+    # Prune old spots from DB.
+    hours = settings.DX_SPOT_RETENTION_HOURS
+    try:
+        await db.execute(
+            "DELETE FROM elmer.dx_spots WHERE timestamp < now() - make_interval(hours => $1)",
+            hours,
+        )
+    except Exception:
+        pass
+
+    return {
+        "connected": status["connected"],
+        "spots_in_memory": status["spots_in_memory"],
+        "total_received": status["total_spots_received"],
+    }
+
+
+async def _task_propagation_fetch() -> dict[str, Any]:
+    """Fetch current propagation conditions from external sources."""
+    from .propagation import get_service
+
+    svc = get_service()
+    conditions = await svc.refresh()
+
+    ok_count = sum(1 for v in conditions.source_status.values() if v == "ok")
+    total = len(conditions.source_status)
+
+    return {
+        "sources_ok": ok_count,
+        "sources_total": total,
+        "solar_flux": conditions.solar.solar_flux,
+        "k_index": conditions.solar.k_index,
+        "bands_loaded": len(conditions.bands),
+    }
+
+
+async def _task_log_sync() -> dict[str, Any]:
+    """Sync QSO daily summaries into the knowledge base."""
+    from .log_analyzer import sync_log_summaries
+
+    return await sync_log_summaries()
+
+
 async def _task_autodoc_regen() -> dict[str, Any]:
     """Regenerate auto-documentation from live system state."""
     from .autodoc import get_documentor
@@ -316,6 +366,30 @@ def create_scheduler() -> Scheduler:
         func=_task_ingest_docs,
         interval_seconds=settings.AUTODOC_INTERVAL_HOURS * 3600,
         run_on_startup=True,
+    ))
+
+    # Propagation data fetch (every 15 minutes, runs on startup).
+    scheduler.add_task(ScheduledTask(
+        name="propagation-fetch",
+        func=_task_propagation_fetch,
+        interval_seconds=900,  # 15 minutes
+        run_on_startup=True,
+    ))
+
+    # DX spot summary and pruning (every 5 minutes).
+    scheduler.add_task(ScheduledTask(
+        name="dx-spot-summary",
+        func=_task_dx_spot_summary,
+        interval_seconds=300,  # 5 minutes
+        run_on_startup=False,
+    ))
+
+    # Log4OM daily sync (every 6 hours, no startup run).
+    scheduler.add_task(ScheduledTask(
+        name="log4om-sync",
+        func=_task_log_sync,
+        interval_seconds=6 * 3600,
+        run_on_startup=False,
     ))
 
     _scheduler = scheduler

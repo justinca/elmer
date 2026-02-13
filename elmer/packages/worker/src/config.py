@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # Obsidian vault path on this Windows machine
     OBSIDIAN_VAULT_PATH: str = ""
 
+    # Log4OM SQLite database path (read-only access)
+    ELMER_LOG4OM_DB_PATH: str = ""
+
     @property
     def ollama_base_url(self) -> str:
         return f"http://{self.ELMER_OLLAMA_HOST}:{self.ELMER_OLLAMA_PORT}"

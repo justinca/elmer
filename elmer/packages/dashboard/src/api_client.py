@@ -330,3 +330,142 @@ class ElmerAPI:
         """GET /agents/schedule -- scheduled agent jobs."""
         data = self._get("/agents/schedule")
         return data if isinstance(data, list) else []
+
+    # -- Propagation --------------------------------------------------------
+
+    def get_propagation(self) -> dict[str, Any] | None:
+        """GET /propagation -- current conditions summary."""
+        return self._get("/propagation")
+
+    def get_propagation_bands(self) -> dict[str, Any] | None:
+        """GET /propagation/bands -- per-band conditions."""
+        return self._get("/propagation/bands")
+
+    def get_propagation_solar(self) -> dict[str, Any] | None:
+        """GET /propagation/solar -- solar indices."""
+        return self._get("/propagation/solar")
+
+    def get_propagation_forecast(self) -> dict[str, Any] | None:
+        """GET /propagation/forecast -- forecast data."""
+        return self._get("/propagation/forecast")
+
+    def get_propagation_history(self, hours: int = 24) -> list[dict[str, Any]]:
+        """GET /propagation/history -- historical data."""
+        data = self._get("/propagation/history", params={"hours": hours})
+        return data if isinstance(data, list) else []
+
+    def get_propagation_band(self, band: str) -> dict[str, Any] | None:
+        """GET /propagation/band/{band} -- specific band detail."""
+        return self._get(f"/propagation/band/{band}")
+
+    # -- DX Cluster ---------------------------------------------------------
+
+    def get_dx_spots(
+        self, band: str | None = None, mode: str | None = None,
+        entity: str | None = None, limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """GET /dx/spots -- recent DX spots."""
+        params: dict[str, Any] = {"limit": limit}
+        if band:
+            params["band"] = band
+        if mode:
+            params["mode"] = mode
+        if entity:
+            params["entity"] = entity
+        data = self._get("/dx/spots", params=params)
+        return data if isinstance(data, list) else []
+
+    def get_dx_summary(self) -> dict[str, Any] | None:
+        """GET /dx/spots/summary -- band activity summary."""
+        return self._get("/dx/spots/summary")
+
+    def get_dx_needs(self, entity: str | None = None) -> list[dict[str, Any]]:
+        """GET /dx/needs -- needs list."""
+        params = {"entity": entity} if entity else None
+        data = self._get("/dx/needs", params=params)
+        return data if isinstance(data, list) else []
+
+    def add_dx_need(self, payload: dict) -> dict | None:
+        """POST /dx/needs -- add to needs list."""
+        return self._post("/dx/needs", json=payload)
+
+    def delete_dx_need(self, need_id: int) -> dict | None:
+        """DELETE /dx/needs/{id}."""
+        return self._delete(f"/dx/needs/{need_id}")
+
+    def get_dx_cluster_status(self) -> dict[str, Any] | None:
+        """GET /dx/cluster/status."""
+        return self._get("/dx/cluster/status")
+
+    def lookup_entity(self, callsign: str) -> dict[str, Any] | None:
+        """GET /dx/entities/{callsign}."""
+        return self._get(f"/dx/entities/{callsign}")
+
+    # -- Logbook (Log4OM) -----------------------------------------------------
+
+    def get_log_status(self) -> dict[str, Any] | None:
+        """GET /log/status -- Log4OM database status."""
+        return self._get("/log/status")
+
+    def get_log_qsos(
+        self, limit: int = 50, offset: int = 0,
+        call: str | None = None, band: str | None = None,
+        mode: str | None = None, country: str | None = None,
+        since: str | None = None, until: str | None = None,
+    ) -> Any:
+        """GET /log/qsos -- filtered QSO list."""
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if call:
+            params["call"] = call
+        if band:
+            params["band"] = band
+        if mode:
+            params["mode"] = mode
+        if country:
+            params["country"] = country
+        if since:
+            params["since"] = since
+        if until:
+            params["until"] = until
+        return self._get("/log/qsos", params=params)
+
+    def get_log_qso_count(self, **kwargs) -> dict[str, Any] | None:
+        """GET /log/qsos/count."""
+        params = {k: v for k, v in kwargs.items() if v is not None}
+        return self._get("/log/qsos/count", params=params or None)
+
+    def get_log_stats(self) -> dict[str, Any] | None:
+        """GET /log/stats -- aggregate statistics."""
+        return self._get("/log/stats")
+
+    def get_log_dxcc(self) -> Any:
+        """GET /log/dxcc -- DXCC entity summary."""
+        return self._get("/log/dxcc")
+
+    def search_log(self, q: str, limit: int = 50) -> Any:
+        """GET /log/search?q=..."""
+        return self._get("/log/search", params={"q": q, "limit": limit})
+
+    def get_log_contests(self) -> Any:
+        """GET /log/contests."""
+        return self._get("/log/contests")
+
+    def get_log_recent(self, limit: int = 20) -> Any:
+        """GET /log/recent."""
+        return self._get("/log/recent", params={"limit": limit})
+
+    def sync_log(self) -> dict[str, Any] | None:
+        """POST /log/sync -- sync log summaries to knowledge base."""
+        return self._post("/log/sync", timeout=_LONG_TIMEOUT)
+
+    def analyze_log(self, days: int = 30, focus: str | None = None) -> dict[str, Any] | None:
+        """POST /log/analyze -- LLM analysis of log activity."""
+        params: dict[str, Any] = {"days": days}
+        if focus:
+            params["focus"] = focus
+        return self._post(f"/log/analyze?days={days}" + (f"&focus={focus}" if focus else ""),
+                          timeout=_LONG_TIMEOUT)
+
+    def check_log_needs(self) -> dict[str, Any] | None:
+        """POST /log/needs-check -- cross-reference needs vs log."""
+        return self._post("/log/needs-check", timeout=_LONG_TIMEOUT)
