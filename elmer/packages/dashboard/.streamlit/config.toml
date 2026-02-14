@@ -6,5 +6,8 @@ headless = true
 [theme]
 base = "dark"
 
+[client]
+showSidebarNavigation = false
+
 [browser]
 gatherUsageStats = false

@@ -14,11 +14,9 @@ from .services import autodoc, db, mqtt_service
 from .services.autodoc import SystemDocumentor
 from .services.scheduler import create_scheduler
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+from elmer_common.logging import setup_logger as _setup_logger
+
+_setup_logger("elmer", logging.INFO)  # root elmer logger with local-tz timestamps
 logger = logging.getLogger("elmer.core")
 
 

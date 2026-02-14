@@ -16,6 +16,8 @@ import asyncio
 import logging
 from datetime import datetime
 
+from elmer_common.timezone import now_local
+
 from telegram import Bot
 from telegram.ext import Application
 
@@ -252,7 +254,7 @@ class NotificationManager:
 
     def _is_quiet_hours(self) -> bool:
         """Check if we're in quiet hours."""
-        hour = datetime.now().hour
+        hour = now_local().hour
         start = settings.QUIET_HOURS_START
         end = settings.QUIET_HOURS_END
 

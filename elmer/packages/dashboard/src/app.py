@@ -40,28 +40,21 @@ with st.sidebar:
         st.caption(group_name.upper())
         for p in pages:
             is_active = st.session_state.page == p
-            if is_active:
-                st.markdown(
-                    f'<div style="background:rgba(99,110,250,0.2);color:#aab;'
-                    f'padding:4px 10px;border-radius:4px;border-left:3px solid #636EFA;'
-                    f'font-weight:600;font-size:0.9em;margin:2px 0;">{p}</div>',
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.button(
-                    p,
-                    key=f"nav_{p}",
-                    on_click=_nav_to,
-                    args=(p,),
-                    use_container_width=True,
-                )
+            st.button(
+                p,
+                key=f"nav_{p}",
+                on_click=_nav_to,
+                args=(p,),
+                use_container_width=True,
+                type="primary" if is_active else "secondary",
+            )
 
     st.divider()
 
     page = st.session_state.page
 
     # Auto-refresh (disable for Chat and builder pages to avoid losing input).
-    no_refresh_pages = {"Chat", "Agent Builder"}
+    no_refresh_pages = {"Chat", "Agent Builder", "Transcriptions"}
     if page not in no_refresh_pages:
         auto_refresh = st.toggle("Auto-refresh", value=True)
         refresh_interval = st.select_slider(

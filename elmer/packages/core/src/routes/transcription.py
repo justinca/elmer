@@ -18,7 +18,7 @@ logger = logging.getLogger("elmer.transcription")
 
 # Worker transcription timeout — large files can take a long time.
 TRANSCRIBE_TIMEOUT = 600.0
-EMBED_TIMEOUT = 60.0
+EMBED_TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=10.0)
 
 
 # --- Request / Response models ---
@@ -149,7 +149,7 @@ async def upload_and_transcribe(file: UploadFile = File(...)):
             async with httpx.AsyncClient(timeout=TRANSCRIBE_TIMEOUT) as client:
                 with open(tmp_path, "rb") as f:
                     resp = await client.post(
-                        f"{settings.worker_base_url}/transcribe/audio",
+                        f"{settings.worker_base_url}/transcribe",
                         files={"file": (file.filename or "audio" + suffix, f, mime)},
                     )
                 resp.raise_for_status()
@@ -165,10 +165,12 @@ async def upload_and_transcribe(file: UploadFile = File(...)):
                 detail=f"Cannot reach worker at {settings.worker_base_url} — is it running?",
             )
         except httpx.HTTPStatusError as exc:
+            body = exc.response.text[:500]
+            logger.error("Worker transcription failed (HTTP %d): %s",
+                         exc.response.status_code, body)
             raise HTTPException(
                 status_code=502,
-                detail=f"Worker returned HTTP {exc.response.status_code} — "
-                       "the transcription endpoint may not be deployed yet",
+                detail=f"Worker error (HTTP {exc.response.status_code}): {body}",
             )
 
         if worker_data.get("status") != "success":

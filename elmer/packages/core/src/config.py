@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     HA_TOKEN: str = ""
     HA_SYNC_INTERVAL: int = 300  # 5 minutes
 
+    # Timezone (used by scheduler, logging, display)
+    TIMEZONE: str = "America/Denver"
+
     # Meshtastic
     MESHTASTIC_CHANNEL_TOPIC: str = "msh/US/2/json/CalvertCasa/#"
     MESHTASTIC_SEND_TOPIC: str = "msh/US/2/json/mqtt/"

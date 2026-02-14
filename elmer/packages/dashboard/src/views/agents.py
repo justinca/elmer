@@ -101,7 +101,19 @@ def _render_data() -> None:
                     if agent.get("config"):
                         st.json(agent["config"])
                     st.markdown("**System Prompt:**")
-                    st.code(agent.get("system_prompt", ""), language=None)
+                    prompt_key = f"prompt_{name}"
+                    current_prompt = agent.get("system_prompt", "")
+                    new_prompt = st.text_area(
+                        "System Prompt",
+                        value=current_prompt,
+                        height=200,
+                        key=prompt_key,
+                        label_visibility="collapsed",
+                    )
+                    if new_prompt != current_prompt:
+                        if st.button("Save Prompt", key=f"save_prompt_{name}", type="primary"):
+                            api.update_agent(name, {"system_prompt": new_prompt})
+                            st.rerun()
 
                 with detail_tabs[1]:
                     if not triggers:

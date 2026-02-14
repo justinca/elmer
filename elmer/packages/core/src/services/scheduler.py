@@ -264,6 +264,25 @@ async def _task_log_sync() -> dict[str, Any]:
     return await sync_log_summaries()
 
 
+async def _task_obsidian_sync() -> dict[str, Any]:
+    """Sync Obsidian vault notes from the worker into the knowledge base."""
+    from fastapi import HTTPException
+
+    from ..routes.notes import _sync_notes
+
+    try:
+        result = await _sync_notes(full=True)
+        return {
+            "added": result.added,
+            "updated": result.updated,
+            "deleted": result.deleted,
+            "unchanged": result.unchanged,
+            "errors": result.errors,
+        }
+    except HTTPException as exc:
+        return {"status": "error", "reason": exc.detail}
+
+
 async def _task_ha_sync() -> dict[str, Any]:
     """Sync Home Assistant entity states to the RAG knowledge base."""
     from .homeassistant import get_service
@@ -425,6 +444,14 @@ def create_scheduler() -> Scheduler:
         name="ha-sync",
         func=_task_ha_sync,
         interval_seconds=settings.HA_SYNC_INTERVAL,
+        run_on_startup=True,
+    ))
+
+    # Obsidian vault sync (every 15 minutes, runs on startup).
+    scheduler.add_task(ScheduledTask(
+        name="obsidian-sync",
+        func=_task_obsidian_sync,
+        interval_seconds=900,  # 15 minutes
         run_on_startup=True,
     ))
 

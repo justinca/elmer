@@ -17,7 +17,7 @@ from ..services import db
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 logger = logging.getLogger("elmer.knowledge")
 
-EMBED_TIMEOUT = 60.0
+EMBED_TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=10.0)
 
 # Allowed tables for search — prevents SQL injection via table name.
 _ALLOWED_TABLES = {"documents", "notes", "transcriptions"}

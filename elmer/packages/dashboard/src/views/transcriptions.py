@@ -40,24 +40,29 @@ def render() -> None:
         mime = MIME_MAP.get(suffix, "application/octet-stream")
 
         if st.button("Transcribe", type="primary"):
-            with st.spinner(f"Transcribing {uploaded.name}... This may take a few minutes."):
-                result = api.upload_transcription(
-                    uploaded.name, uploaded.read(), mime,
-                )
-
-            if result is None:
-                st.error("Transcription failed. Is the worker running?")
-            elif result.get("transcript"):
-                st.success("Transcription complete!")
-                duration = _format_duration(result.get("duration_seconds"))
-                lang = result.get("language") or ""
-                st.caption(f"Duration: {duration} \u00b7 Language: {lang}")
-                st.text_area(
-                    "Transcript", result["transcript"],
-                    height=200, disabled=True,
-                )
+            file_bytes = uploaded.read()
+            if not file_bytes:
+                st.error("File appears empty (0 bytes). Try re-uploading.")
             else:
-                st.warning("No speech detected in the audio.")
+                st.caption(f"Uploading {len(file_bytes) / 1_048_576:.1f} MB...")
+                with st.spinner(f"Transcribing {uploaded.name}... This may take a few minutes."):
+                    result = api.upload_transcription(
+                        uploaded.name, file_bytes, mime,
+                    )
+
+                if result is None:
+                    st.error("Transcription failed. Check dashboard container logs for details.")
+                elif result.get("transcript"):
+                    st.success("Transcription complete!")
+                    duration = _format_duration(result.get("duration_seconds"))
+                    lang = result.get("language") or ""
+                    st.caption(f"Duration: {duration} \u00b7 Language: {lang}")
+                    st.text_area(
+                        "Transcript", result["transcript"],
+                        height=200, disabled=True,
+                    )
+                else:
+                    st.warning("No speech detected in the audio.")
 
     st.divider()
 

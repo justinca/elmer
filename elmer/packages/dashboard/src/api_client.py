@@ -1,9 +1,12 @@
 """HTTP client for the Elmer Core API."""
 
+import logging
 import os
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger("elmer.dashboard.api")
 
 CORE_BASE_URL = (
     f"http://{os.getenv('ELMER_CORE_HOST', 'localhost')}"
@@ -67,6 +70,7 @@ class ElmerAPI:
                    timeout: float | None = None) -> dict | None:
         """POST a file upload."""
         try:
+            logger.info("Uploading %s (%d bytes) to %s", file_name, len(file_bytes), path)
             files = {"file": (file_name, file_bytes, mime)}
             with httpx.Client(timeout=timeout or _LONG_TIMEOUT) as client:
                 resp = client.post(
@@ -76,7 +80,8 @@ class ElmerAPI:
                 )
                 resp.raise_for_status()
                 return resp.json()
-        except (httpx.RequestError, httpx.HTTPStatusError):
+        except (httpx.RequestError, httpx.HTTPStatusError) as exc:
+            logger.error("Upload failed for %s: %s", path, exc)
             return None
 
     # -- Health ---------------------------------------------------------------

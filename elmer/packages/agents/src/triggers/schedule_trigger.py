@@ -7,6 +7,7 @@ from typing import Any, Callable, Awaitable
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from elmer_common.timezone import LOCAL_TZ_NAME
 
 from ..models import AgentDefinition
 
@@ -20,7 +21,7 @@ class ScheduleTriggerManager:
 
     def __init__(self, enqueue: EnqueueCallback) -> None:
         self._enqueue = enqueue
-        self._scheduler = AsyncIOScheduler(timezone="UTC")
+        self._scheduler = AsyncIOScheduler(timezone=LOCAL_TZ_NAME)
         # agent_name -> [job_id, ...]
         self._job_ids: dict[str, list[str]] = {}
 
@@ -55,7 +56,7 @@ class ScheduleTriggerManager:
                     day=parts[2],
                     month=parts[3],
                     day_of_week=parts[4],
-                    timezone="UTC",
+                    timezone=LOCAL_TZ_NAME,
                 )
                 self._scheduler.add_job(
                     self._fire,

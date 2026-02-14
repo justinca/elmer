@@ -16,8 +16,8 @@ from ..services import db
 router = APIRouter(prefix="/notes", tags=["notes"])
 logger = logging.getLogger("elmer.notes")
 
-EMBED_TIMEOUT = 60.0
-WORKER_TIMEOUT = 30.0
+EMBED_TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=10.0)
+WORKER_TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=10.0)
 
 
 # --- Request / Response models ---

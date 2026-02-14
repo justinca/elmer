@@ -23,7 +23,7 @@ def _render_data() -> None:
         if st.button("Sync Docs", type="primary"):
             with st.spinner("Syncing documents..."):
                 result = api.knowledge_ingest_directory(
-                    "/data/docs", "elmer-docs", ["*.md"],
+                    "/app/docs", "elmer-docs", ["*.md"],
                 )
             if result:
                 ingested = result.get("ingested", 0)

@@ -5,6 +5,19 @@ Runs on the Windows desktop with GPU access. Provides LLM inference
 Elmer network.
 """
 
+# Register NVIDIA DLL directories before any CUDA libraries are imported.
+# Python 3.8+ on Windows no longer uses PATH for DLL resolution.
+import os
+import sys
+
+if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
+    _site_packages = os.path.join(sys.prefix, "Lib", "site-packages", "nvidia")
+    if os.path.isdir(_site_packages):
+        for _pkg in os.listdir(_site_packages):
+            _bin = os.path.join(_site_packages, _pkg, "bin")
+            if os.path.isdir(_bin):
+                os.add_dll_directory(_bin)
+
 import json
 import logging
 import platform
@@ -20,11 +33,9 @@ from .config import settings
 from .routes import health, llm, log4om, obsidian, transcribe
 from .services import gpu_monitor
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+from elmer_common.logging import setup_logger as _setup_logger
+
+_setup_logger("elmer", logging.INFO)
 logger = logging.getLogger("elmer.worker")
 
 HEARTBEAT_INTERVAL = 30  # seconds

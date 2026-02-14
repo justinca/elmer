@@ -18,8 +18,8 @@ from ..services import db
 
 logger = logging.getLogger("elmer.log_analyzer")
 
-_WORKER_TIMEOUT = 30.0
-_LLM_TIMEOUT = 120.0
+_WORKER_TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=10.0)
+_LLM_TIMEOUT = httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=10.0)
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ async def _get_embedding(text: str) -> list[float]:
     ollama_url = f"{settings.ollama_base_url}/api/embed"
     payload = {"model": "nomic-embed-text", "input": text}
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=10.0)) as client:
         try:
             resp = await client.post(worker_url, json=payload)
             resp.raise_for_status()
@@ -76,7 +76,7 @@ async def _get_embedding(text: str) -> list[float]:
         except (httpx.RequestError, RuntimeError) as exc:
             logger.warning("Worker embed failed (%s), falling back to Ollama", exc)
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=10.0)) as client:
         resp = await client.post(ollama_url, json=payload)
         resp.raise_for_status()
         data = resp.json()

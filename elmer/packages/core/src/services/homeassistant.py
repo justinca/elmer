@@ -15,7 +15,7 @@ from . import db
 logger = logging.getLogger("elmer.homeassistant")
 
 FETCH_TIMEOUT = 15.0
-EMBED_TIMEOUT = 60.0
+EMBED_TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=10.0)
 CACHE_TTL = 60.0  # 1 minute in-memory state cache
 
 

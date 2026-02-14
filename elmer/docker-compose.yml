@@ -36,6 +36,8 @@ services:
     container_name: elmer-core
     network_mode: host
     env_file: .env
+    environment:
+      TZ: America/Denver
     volumes:
       - ./docs:/app/docs
       - ./packages/agents/agent_definitions:/app/agent_definitions:ro
@@ -65,6 +67,7 @@ services:
     network_mode: host
     env_file: .env
     environment:
+      TZ: America/Denver
       ELMER_CORE_HOST: localhost
     restart: unless-stopped
     healthcheck:
@@ -92,6 +95,8 @@ services:
     container_name: elmer-telegram
     network_mode: host
     env_file: .env
+    environment:
+      TZ: America/Denver
     restart: unless-stopped
     depends_on:
       elmer-core:
@@ -111,6 +116,7 @@ services:
     network_mode: host
     env_file: .env
     environment:
+      TZ: America/Denver
       ELMER_DOCS_PATH: /data/docs
     volumes:
       - ./docs:/data/docs:ro
@@ -131,6 +137,7 @@ services:
     network_mode: host
     env_file: .env
     environment:
+      TZ: America/Denver
       TRANSCRIPTION_WATCH_DIR: /data/inbox
       TRANSCRIPTION_PROCESSED_DIR: /data/processed
     volumes:

@@ -31,14 +31,14 @@ async def llm_chat(request: LLMChatRequest) -> LLMChatResponse:
     }
 
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=10.0)) as client:
             resp = await client.post(url, json=payload)
             data = resp.json()
     except httpx.RequestError as exc:
         logger.warning("Worker unreachable for /llm/chat: %s", exc)
         # Fall back to direct Ollama if worker is down.
         try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=10.0)) as client:
                 resp = await client.post(
                     f"{settings.ollama_base_url}/api/chat",
                     json=payload,

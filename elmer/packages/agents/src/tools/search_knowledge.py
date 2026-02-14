@@ -9,7 +9,7 @@ from .base import BaseTool, ToolResult
 
 logger = logging.getLogger("elmer.agents.tools.search_knowledge")
 
-_EMBED_TIMEOUT = 60.0
+_EMBED_TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=10.0)
 
 # Map user-friendly source names to database table names.
 _SOURCE_TABLE_MAP = {

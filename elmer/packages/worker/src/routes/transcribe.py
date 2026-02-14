@@ -4,6 +4,7 @@ Accepts audio file uploads or local file paths and returns structured
 transcription results using faster-whisper (CTranslate2 backend).
 """
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -14,6 +15,8 @@ from ..services import gpu_monitor, whisper_service
 
 logger = logging.getLogger("elmer.worker.transcribe")
 router = APIRouter()
+
+TRANSCRIBE_TIMEOUT = 300  # 5 minutes max for Whisper
 
 
 class FilePathRequest(BaseModel):
@@ -43,7 +46,16 @@ async def transcribe_upload(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Empty audio file")
 
     logger.info("Transcribe upload: %s (%d bytes)", filename, len(audio_bytes))
-    result = whisper_service.transcribe_bytes(audio_bytes, suffix=suffix)
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(whisper_service.transcribe_bytes, audio_bytes, suffix=suffix),
+            timeout=TRANSCRIBE_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Transcription timed out after 5 minutes")
+    except Exception as exc:
+        logger.exception("Transcription failed for %s", filename)
+        raise HTTPException(status_code=500, detail=f"Transcription error: {exc}")
     return result
 
 
@@ -67,7 +79,16 @@ async def transcribe_file(req: FilePathRequest):
         )
 
     logger.info("Transcribe file: %s", file_path)
-    result = whisper_service.transcribe(file_path)
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(whisper_service.transcribe, file_path),
+            timeout=TRANSCRIBE_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Transcription timed out after 5 minutes")
+    except Exception as exc:
+        logger.exception("Transcription failed for %s", file_path)
+        raise HTTPException(status_code=500, detail=f"Transcription error: {exc}")
     return result
 
 

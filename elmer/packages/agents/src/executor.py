@@ -20,7 +20,7 @@ from .tools.base import ToolResult
 
 logger = logging.getLogger("elmer.agents.executor")
 
-_CHAT_TIMEOUT = 120.0
+_CHAT_TIMEOUT = httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=10.0)
 _MAX_TOOL_ROUNDS = 10
 _MAX_TOOL_RESULT_CHARS = 4000
 _DEFAULT_MAX_CONCURRENT = 5

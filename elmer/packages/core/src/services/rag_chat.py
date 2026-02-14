@@ -28,8 +28,8 @@ Be concise, technical when appropriate, and helpful. You understand \
 amateur radio, home automation, networking, Linux, and Docker.\
 """
 
-EMBED_TIMEOUT = 60.0
-CHAT_TIMEOUT = 120.0
+EMBED_TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=10.0)
+CHAT_TIMEOUT = httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=10.0)
 # llama3.1:8b context window is ~8192 tokens; ~4 chars per token.
 MAX_CONTEXT_CHARS = 24000
 MAX_HISTORY_MESSAGES = 10

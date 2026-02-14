@@ -151,11 +151,8 @@ class FileWatcher:
 
 async def main() -> None:
     """Entry point for running the watcher as a standalone service."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    from elmer_common.logging import setup_logger as _setup_logger
+    _setup_logger("elmer", logging.INFO)
     logger.info("Elmer Transcription Watcher starting...")
     watcher = FileWatcher()
     try:

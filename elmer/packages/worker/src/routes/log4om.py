@@ -678,12 +678,12 @@ async def get_daily_summary(
     days: int = Query(default=1, ge=1, le=30),
 ):
     """Daily QSO summary for knowledge base sync."""
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
     if date:
         start = date
     else:
-        start = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+        start = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
 
     # Calculate end date.
     start_dt = datetime.strptime(start, "%Y-%m-%d")
