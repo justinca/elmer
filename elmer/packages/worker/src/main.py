@@ -118,6 +118,15 @@ async def lifespan(app: FastAPI):
     )
     heartbeat.start()
 
+    # Start folder watcher if configured.
+    watcher_stop = None
+    watcher_thread = None
+    if settings.WATCH_FOLDER:
+        from .services.folder_watcher import start_watcher
+
+        watcher_stop, watcher_thread = start_watcher()
+        logger.info("Folder watcher started: %s", settings.WATCH_FOLDER)
+
     logger.info("Elmer Worker ready on port %s", settings.WORKER_PORT)
 
     yield
@@ -126,6 +135,10 @@ async def lifespan(app: FastAPI):
     logger.info("Elmer Worker shutting down...")
     stop_event.set()
     heartbeat.join(timeout=5.0)
+
+    if watcher_stop is not None:
+        watcher_stop.set()
+        watcher_thread.join(timeout=30.0)
 
     logger.info("Elmer Worker stopped.")
 

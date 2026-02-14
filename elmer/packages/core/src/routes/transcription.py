@@ -45,6 +45,19 @@ class TranscriptionResponse(BaseModel):
     speakers: list[str] = Field(default_factory=list)
 
 
+class TranscriptionIngestRequest(BaseModel):
+    """Accept pre-computed transcription results (e.g. from folder watcher)."""
+    audio_file: str
+    transcript: str
+    segments: list[dict] = Field(default_factory=list)
+    language: str | None = None
+    duration_seconds: float | None = None
+    model: str | None = None
+    diarized: bool = False
+    speakers: list[str] = Field(default_factory=list)
+    source: str = "folder_watcher"
+
+
 class TranscriptionListItem(BaseModel):
     id: int
     audio_file: str
@@ -247,6 +260,77 @@ async def upload_and_transcribe(
         )
     finally:
         Path(tmp_path).unlink(missing_ok=True)
+
+
+@router.post("/ingest", response_model=TranscriptionResponse)
+async def ingest_transcription(request: TranscriptionIngestRequest):
+    """Ingest a pre-computed transcription result.
+
+    Stores in DB, generates embedding, publishes MQTT notification.
+    Used by the folder watcher to bypass file upload size limits.
+    """
+    if not request.transcript and not request.segments:
+        raise HTTPException(status_code=400, detail="No transcript or segments provided")
+
+    transcript_text = request.transcript
+    segments_json = json.dumps(request.segments)
+    meta_json = json.dumps({
+        "source": request.source,
+        "original_filename": request.audio_file,
+        "diarized": request.diarized,
+        "speakers": request.speakers,
+    })
+
+    row = await db.fetch_one(
+        """
+        INSERT INTO elmer.transcriptions
+            (audio_file, transcript, segments, language, duration_seconds, model, metadata)
+        VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7::jsonb)
+        RETURNING id, created_at
+        """,
+        request.audio_file,
+        transcript_text,
+        segments_json,
+        request.language,
+        request.duration_seconds,
+        request.model,
+        meta_json,
+    )
+    row_id = row["id"]
+
+    # Generate and store embedding (non-blocking on failure).
+    if transcript_text.strip():
+        try:
+            embedding = await _get_embedding(transcript_text)
+            vec_str = "[" + ",".join(str(f) for f in embedding) + "]"
+            await db.execute(
+                "UPDATE elmer.transcriptions SET embedding = $1::vector WHERE id = $2",
+                vec_str, row_id,
+            )
+        except Exception:
+            logger.exception("Failed to embed transcription id=%d", row_id)
+
+    # Publish MQTT notification.
+    await _publish_mqtt(row_id, request.audio_file, {
+        "transcript": transcript_text,
+        "language": request.language,
+        "duration_seconds": request.duration_seconds,
+    })
+
+    segments = [TranscriptionSegment(**s) for s in request.segments]
+    return TranscriptionResponse(
+        id=row_id,
+        audio_file=request.audio_file,
+        transcript=transcript_text,
+        segments=segments,
+        language=request.language,
+        duration_seconds=request.duration_seconds,
+        model=request.model,
+        metadata=json.loads(meta_json),
+        created_at=str(row["created_at"]),
+        diarized=request.diarized,
+        speakers=request.speakers,
+    )
 
 
 @router.get("", response_model=list[TranscriptionListItem])

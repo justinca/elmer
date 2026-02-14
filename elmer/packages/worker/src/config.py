@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     DIARIZE_DEVICE: str = "cuda"
     HF_TOKEN: str = ""  # Only needed for first model download
 
+    # Elmer Core (NUC) — for posting transcription results
+    ELMER_CORE_HOST: str = "192.168.1.127"
+    ELMER_CORE_PORT: int = 8100
+
+    # Folder watcher — polls for new audio files to transcribe
+    WATCH_FOLDER: str = ""  # Empty = disabled
+    WATCH_INTERVAL_SECONDS: int = 900  # 15 minutes
+
     # Obsidian vault path on this Windows machine
     OBSIDIAN_VAULT_PATH: str = ""
 
@@ -37,6 +45,10 @@ class Settings(BaseSettings):
     @property
     def ollama_base_url(self) -> str:
         return f"http://{self.ELMER_OLLAMA_HOST}:{self.ELMER_OLLAMA_PORT}"
+
+    @property
+    def core_base_url(self) -> str:
+        return f"http://{self.ELMER_CORE_HOST}:{self.ELMER_CORE_PORT}"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
