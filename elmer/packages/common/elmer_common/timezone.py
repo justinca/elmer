@@ -6,10 +6,15 @@ converting to local time when displaying or evaluating local-time rules
 (quiet hours, cron schedules, log output).
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-LOCAL_TZ = ZoneInfo("America/Denver")
+try:
+    LOCAL_TZ = ZoneInfo("America/Denver")
+except KeyError:
+    # Windows without tzdata package — fall back to fixed MST (UTC-7).
+    # Install ``pip install tzdata`` for full DST support.
+    LOCAL_TZ = timezone(timedelta(hours=-7))  # type: ignore[assignment]
 """Project-wide local timezone (Mountain Time)."""
 
 LOCAL_TZ_NAME = "America/Denver"
