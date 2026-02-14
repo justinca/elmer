@@ -173,10 +173,15 @@ async def upload_and_transcribe(file: UploadFile = File(...)):
                 detail=f"Worker error (HTTP {exc.response.status_code}): {body}",
             )
 
-        if worker_data.get("status") != "success":
+        # Worker returns {text, segments, language, duration};
+        # normalise to the field names Core uses internally.
+        transcript_text = worker_data.get("text") or worker_data.get("transcript") or ""
+        duration_secs = worker_data.get("duration") or worker_data.get("duration_seconds")
+
+        if not transcript_text and not worker_data.get("segments"):
             raise HTTPException(
                 status_code=502,
-                detail=f"Worker error: {worker_data.get('message', worker_data.get('detail', 'unknown'))}",
+                detail=f"Worker error: {worker_data.get('message', worker_data.get('detail', 'empty response'))}",
             )
 
         # Store in database.
@@ -191,17 +196,16 @@ async def upload_and_transcribe(file: UploadFile = File(...)):
             RETURNING id, created_at
             """,
             file.filename or "upload" + suffix,
-            worker_data.get("transcript", ""),
+            transcript_text,
             segments_json,
             worker_data.get("language"),
-            worker_data.get("duration_seconds"),
+            duration_secs,
             worker_data.get("model"),
             meta_json,
         )
         row_id = row["id"]
 
         # Generate and store embedding (non-blocking on failure).
-        transcript_text = worker_data.get("transcript", "")
         if transcript_text.strip():
             try:
                 embedding = await _get_embedding(transcript_text)
@@ -223,7 +227,7 @@ async def upload_and_transcribe(file: UploadFile = File(...)):
             transcript=transcript_text,
             segments=segments,
             language=worker_data.get("language"),
-            duration_seconds=worker_data.get("duration_seconds"),
+            duration_seconds=duration_secs,
             model=worker_data.get("model"),
             metadata={"source": "api_upload", "original_filename": file.filename},
             created_at=str(row["created_at"]),
