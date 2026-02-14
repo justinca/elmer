@@ -2,33 +2,40 @@
 
 Accepts audio file uploads or local file paths and returns structured
 transcription results using faster-whisper (CTranslate2 backend).
+Optionally runs speaker diarization via pyannote.audio.
 """
 
 import asyncio
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel
 
-from ..services import gpu_monitor, whisper_service
+from ..services import gpu_monitor, whisper_service, diarize_service
 
 logger = logging.getLogger("elmer.worker.transcribe")
 router = APIRouter()
 
-TRANSCRIBE_TIMEOUT = 300  # 5 minutes max for Whisper
+TRANSCRIBE_TIMEOUT = 300  # 5 minutes for transcription only
+DIARIZE_TIMEOUT = 600     # 10 minutes when diarization is included
 
 
 class FilePathRequest(BaseModel):
     """Request body for transcribing a file already on disk."""
     path: str
+    diarize: bool = False
 
 
 @router.post("")
-async def transcribe_upload(file: UploadFile = File(...)):
+async def transcribe_upload(
+    file: UploadFile = File(...),
+    diarize: bool = Query(False, description="Enable speaker diarization"),
+):
     """Transcribe an uploaded audio file.
 
     Accepts multipart file upload. Supported formats: wav, mp3, m4a, flac, ogg.
+    Pass ?diarize=true to add speaker labels to segments.
 
     Returns transcription with text, segments, language, and duration.
     """
@@ -45,14 +52,17 @@ async def transcribe_upload(file: UploadFile = File(...)):
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio file")
 
-    logger.info("Transcribe upload: %s (%d bytes)", filename, len(audio_bytes))
+    timeout = DIARIZE_TIMEOUT if diarize else TRANSCRIBE_TIMEOUT
+    logger.info("Transcribe upload: %s (%d bytes, diarize=%s)", filename, len(audio_bytes), diarize)
     try:
         result = await asyncio.wait_for(
-            asyncio.to_thread(whisper_service.transcribe_bytes, audio_bytes, suffix=suffix),
-            timeout=TRANSCRIBE_TIMEOUT,
+            asyncio.to_thread(
+                whisper_service.transcribe_bytes, audio_bytes, suffix=suffix, diarize=diarize,
+            ),
+            timeout=timeout,
         )
     except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="Transcription timed out after 5 minutes")
+        raise HTTPException(status_code=504, detail=f"Transcription timed out after {timeout}s")
     except Exception as exc:
         logger.exception("Transcription failed for %s", filename)
         raise HTTPException(status_code=500, detail=f"Transcription error: {exc}")
@@ -78,14 +88,15 @@ async def transcribe_file(req: FilePathRequest):
             detail=f"Unsupported format '{file_path.suffix}'. Supported: {', '.join(whisper_service.SUPPORTED_EXTENSIONS)}",
         )
 
-    logger.info("Transcribe file: %s", file_path)
+    timeout = DIARIZE_TIMEOUT if req.diarize else TRANSCRIBE_TIMEOUT
+    logger.info("Transcribe file: %s (diarize=%s)", file_path, req.diarize)
     try:
         result = await asyncio.wait_for(
-            asyncio.to_thread(whisper_service.transcribe, file_path),
-            timeout=TRANSCRIBE_TIMEOUT,
+            asyncio.to_thread(whisper_service.transcribe, file_path, diarize=req.diarize),
+            timeout=timeout,
         )
     except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="Transcription timed out after 5 minutes")
+        raise HTTPException(status_code=504, detail=f"Transcription timed out after {timeout}s")
     except Exception as exc:
         logger.exception("Transcription failed for %s", file_path)
         raise HTTPException(status_code=500, detail=f"Transcription error: {exc}")
@@ -101,6 +112,9 @@ async def transcribe_status():
         "model_loaded": whisper_service.is_loaded(),
         "whisper_model": whisper_service.settings.WHISPER_MODEL,
         "whisper_device": whisper_service.settings.WHISPER_DEVICE,
+        "diarization_loaded": diarize_service.is_loaded(),
+        "diarization_model": whisper_service.settings.DIARIZE_MODEL,
+        "diarization_device": whisper_service.settings.DIARIZE_DEVICE,
         "gpu": {
             "available": gpu.available,
             "memory_free_mb": gpu.memory_total_mb - gpu.memory_used_mb if gpu.available else 0,

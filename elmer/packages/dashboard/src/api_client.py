@@ -215,11 +215,13 @@ class ElmerAPI:
 
     def upload_transcription(
         self, filename: str, file_bytes: bytes, mime: str,
+        diarize: bool = False,
     ) -> dict | None:
         """POST /transcription/upload -- upload audio for transcription."""
-        return self._post_file(
-            "/transcription/upload", filename, file_bytes, mime,
-        )
+        path = "/transcription/upload"
+        if diarize:
+            path += "?diarize=true"
+        return self._post_file(path, filename, file_bytes, mime)
 
     # -- Notes ----------------------------------------------------------------
 

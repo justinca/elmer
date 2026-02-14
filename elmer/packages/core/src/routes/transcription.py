@@ -28,6 +28,7 @@ class TranscriptionSegment(BaseModel):
     start: float
     end: float
     text: str
+    speaker: str | None = None
 
 
 class TranscriptionResponse(BaseModel):
@@ -40,6 +41,8 @@ class TranscriptionResponse(BaseModel):
     model: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: str | None = None
+    diarized: bool = False
+    speakers: list[str] = Field(default_factory=list)
 
 
 class TranscriptionListItem(BaseModel):
@@ -124,10 +127,14 @@ async def _publish_mqtt(row_id: int, filename: str, worker_result: dict[str, Any
 
 
 @router.post("/upload", response_model=TranscriptionResponse)
-async def upload_and_transcribe(file: UploadFile = File(...)):
+async def upload_and_transcribe(
+    file: UploadFile = File(...),
+    diarize: bool = Query(False, description="Enable speaker diarization"),
+):
     """Upload an audio file and transcribe it via the worker.
 
     Full pipeline: upload → worker transcription → store in DB → embed → MQTT notify.
+    Pass ?diarize=true to add speaker labels to segments.
     """
     suffix = Path(file.filename).suffix if file.filename else ".wav"
 
@@ -145,11 +152,15 @@ async def upload_and_transcribe(file: UploadFile = File(...)):
         }
         mime = mime_map.get(suffix.lower(), "application/octet-stream")
 
+        worker_url = f"{settings.worker_base_url}/transcribe"
+        if diarize:
+            worker_url += "?diarize=true"
+
         try:
             async with httpx.AsyncClient(timeout=TRANSCRIBE_TIMEOUT) as client:
                 with open(tmp_path, "rb") as f:
                     resp = await client.post(
-                        f"{settings.worker_base_url}/transcribe",
+                        worker_url,
                         files={"file": (file.filename or "audio" + suffix, f, mime)},
                     )
                 resp.raise_for_status()
@@ -231,6 +242,8 @@ async def upload_and_transcribe(file: UploadFile = File(...)):
             model=worker_data.get("model"),
             metadata={"source": "api_upload", "original_filename": file.filename},
             created_at=str(row["created_at"]),
+            diarized=worker_data.get("diarized", False),
+            speakers=worker_data.get("speakers", []),
         )
     finally:
         Path(tmp_path).unlink(missing_ok=True)

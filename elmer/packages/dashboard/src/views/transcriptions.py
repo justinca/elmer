@@ -39,15 +39,20 @@ def render() -> None:
         suffix = uploaded.name.rsplit(".", 1)[-1].lower() if "." in uploaded.name else "wav"
         mime = MIME_MAP.get(suffix, "application/octet-stream")
 
+        diarize = st.checkbox("Enable speaker diarization", value=False)
+
         if st.button("Transcribe", type="primary"):
             file_bytes = uploaded.read()
             if not file_bytes:
                 st.error("File appears empty (0 bytes). Try re-uploading.")
             else:
                 st.caption(f"Uploading {len(file_bytes) / 1_048_576:.1f} MB...")
-                with st.spinner(f"Transcribing {uploaded.name}... This may take a few minutes."):
+                label = "Transcribing"
+                if diarize:
+                    label += " + diarizing"
+                with st.spinner(f"{label} {uploaded.name}... This may take a few minutes."):
                     result = api.upload_transcription(
-                        uploaded.name, file_bytes, mime,
+                        uploaded.name, file_bytes, mime, diarize=diarize,
                     )
 
                 if result is None:
@@ -166,14 +171,20 @@ def render() -> None:
 
                     segments = detail.get("segments", [])
                     if segments:
-                        st.caption(f"{len(segments)} segments")
+                        speakers = detail.get("speakers", [])
+                        if speakers:
+                            st.caption(f"{len(segments)} segments, {len(speakers)} speakers")
+                        else:
+                            st.caption(f"{len(segments)} segments")
                         for seg in segments[:50]:
                             start = seg.get("start", 0)
                             end = seg.get("end", 0)
                             text = seg.get("text", "")
+                            speaker = seg.get("speaker")
+                            label = f"**{speaker}**: " if speaker else ""
                             st.caption(
                                 f"[{_format_duration(start)} - "
-                                f"{_format_duration(end)}] {text}"
+                                f"{_format_duration(end)}] {label}{text}"
                             )
                 else:
                     st.warning("Could not load transcript details.")

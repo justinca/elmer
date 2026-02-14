@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     WHISPER_MODEL: str = "medium.en"
     WHISPER_DEVICE: str = "cuda"
 
+    # Speaker diarization (pyannote.audio)
+    DIARIZE_MODEL: str = "pyannote/speaker-diarization-3.1"
+    DIARIZE_DEVICE: str = "cpu"
+    HF_TOKEN: str = ""  # Only needed for first model download
+
     # Obsidian vault path on this Windows machine
     OBSIDIAN_VAULT_PATH: str = ""
 
