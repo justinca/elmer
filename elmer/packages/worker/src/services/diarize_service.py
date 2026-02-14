@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 import torch
+import torchaudio
 from pyannote.audio import Pipeline
 
 from ..config import settings
@@ -60,7 +61,8 @@ def diarize(audio_path: str | Path) -> list[dict]:
     logger.info("Diarizing %s", audio_path.name)
     start = time.time()
 
-    diarization = pipeline(str(audio_path))
+    waveform, sample_rate = torchaudio.load(str(audio_path))
+    diarization = pipeline({"waveform": waveform, "sample_rate": sample_rate})
 
     speaker_segments = []
     for turn, _, speaker in diarization.itertracks(yield_label=True):
