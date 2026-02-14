@@ -33,7 +33,7 @@ def _load_pipeline() -> Pipeline:
 
     _pipeline = Pipeline.from_pretrained(
         settings.DIARIZE_MODEL,
-        use_auth_token=settings.HF_TOKEN or None,
+        token=settings.HF_TOKEN or None,
     )
     _pipeline = _pipeline.to(torch.device(settings.DIARIZE_DEVICE))
 
