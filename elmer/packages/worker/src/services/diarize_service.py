@@ -8,8 +8,9 @@ import logging
 import time
 from pathlib import Path
 
+import numpy as np
+import soundfile as sf
 import torch
-import torchaudio
 from pyannote.audio import Pipeline
 
 from ..config import settings
@@ -61,7 +62,13 @@ def diarize(audio_path: str | Path) -> list[dict]:
     logger.info("Diarizing %s", audio_path.name)
     start = time.time()
 
-    waveform, sample_rate = torchaudio.load(str(audio_path))
+    data, sample_rate = sf.read(str(audio_path), dtype="float32")
+    # soundfile returns (samples,) for mono or (samples, channels) for stereo
+    if data.ndim == 1:
+        data = data[np.newaxis, :]  # (1, samples)
+    else:
+        data = data.T  # (channels, samples)
+    waveform = torch.from_numpy(data)
     diarization = pipeline({"waveform": waveform, "sample_rate": sample_rate})
 
     speaker_segments = []
