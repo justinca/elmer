@@ -519,6 +519,54 @@ class ElmerAPI:
         """GET /pota/plan/{park_id}/bands -- band recommendations."""
         return self._get(f"/pota/plan/{park_id}/bands", timeout=15.0)
 
+    # -- Radio Control / Band Scanner ----------------------------------------
+
+    def get_radio_status(self) -> dict[str, Any] | None:
+        """GET /radio/status -- OmniRig connection, freq, mode."""
+        return self._get("/radio/status")
+
+    def set_radio_frequency(self, freq_hz: int) -> dict[str, Any] | None:
+        """POST /radio/frequency."""
+        return self._post("/radio/frequency", json={"frequency_hz": freq_hz})
+
+    def set_radio_mode(self, mode: str) -> dict[str, Any] | None:
+        """POST /radio/mode."""
+        return self._post("/radio/mode", json={"mode": mode})
+
+    def get_scanner_status(self) -> dict[str, Any] | None:
+        """GET /radio/scanner/status."""
+        return self._get("/radio/scanner/status")
+
+    def scanner_start(self, dwell_seconds: int | None = None,
+                      bands: list[str] | None = None) -> dict[str, Any] | None:
+        """POST /radio/scanner/start."""
+        payload: dict[str, Any] = {}
+        if dwell_seconds:
+            payload["dwell_seconds"] = dwell_seconds
+        if bands:
+            payload["bands"] = bands
+        return self._post("/radio/scanner/start", json=payload or None)
+
+    def scanner_stop(self) -> dict[str, Any] | None:
+        """POST /radio/scanner/stop."""
+        return self._post("/radio/scanner/stop")
+
+    def scanner_pause(self) -> dict[str, Any] | None:
+        """POST /radio/scanner/pause."""
+        return self._post("/radio/scanner/pause")
+
+    def scanner_resume(self) -> dict[str, Any] | None:
+        """POST /radio/scanner/resume."""
+        return self._post("/radio/scanner/resume")
+
+    def scanner_next(self) -> dict[str, Any] | None:
+        """POST /radio/scanner/next."""
+        return self._post("/radio/scanner/next")
+
+    def scanner_dwell(self, seconds: int) -> dict[str, Any] | None:
+        """POST /radio/scanner/dwell."""
+        return self._post("/radio/scanner/dwell", json={"seconds": seconds})
+
     # -- Contests -----------------------------------------------------------
 
     def get_upcoming_contests(self, days: int = 30) -> list[dict[str, Any]]:

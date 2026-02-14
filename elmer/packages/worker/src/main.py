@@ -30,7 +30,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routes import health, llm, log4om, obsidian, transcribe
+from .routes import health, llm, log4om, obsidian, radio, transcribe
 from .services import gpu_monitor
 
 from elmer_common.logging import setup_logger as _setup_logger
@@ -118,6 +118,30 @@ async def lifespan(app: FastAPI):
     )
     heartbeat.start()
 
+    # Connect OmniRig radio control (non-fatal).
+    try:
+        from .services.radio_control import get_radio_control
+
+        rc = get_radio_control(settings.OMNIRIG_RIG_NUMBER)
+        result = rc.connect()
+        if result.get("connected"):
+            logger.info("OmniRig connected: %s", result.get("rig_type"))
+        else:
+            logger.warning("OmniRig not available: %s", result.get("error"))
+    except Exception as exc:
+        logger.warning("OmniRig init skipped: %s", exc)
+
+    # Auto-start band scanner if configured.
+    if settings.SCANNER_AUTO_START:
+        try:
+            from .services.band_scanner import get_band_scanner
+
+            scanner = get_band_scanner()
+            scanner.start()
+            logger.info("Band scanner auto-started")
+        except Exception as exc:
+            logger.warning("Band scanner auto-start failed: %s", exc)
+
     # Start folder watcher if configured.
     watcher_stop = None
     watcher_thread = None
@@ -133,6 +157,17 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Elmer Worker shutting down...")
+
+    # Stop band scanner if running.
+    try:
+        from .services.band_scanner import get_band_scanner
+
+        scanner = get_band_scanner()
+        if scanner.get_status().scanning:
+            scanner.stop()
+    except Exception:
+        pass
+
     stop_event.set()
     heartbeat.join(timeout=5.0)
 
@@ -163,6 +198,7 @@ app.include_router(llm.router, prefix="/llm", tags=["llm"])
 app.include_router(transcribe.router, prefix="/transcribe", tags=["transcribe"])
 app.include_router(log4om.router, prefix="/log4om", tags=["log4om"])
 app.include_router(obsidian.router, prefix="/obsidian", tags=["obsidian"])
+app.include_router(radio.router, prefix="/radio", tags=["radio"])
 
 
 if __name__ == "__main__":

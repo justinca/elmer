@@ -1,0 +1,78 @@
+# =============================================================
+# Band Scanner Agent
+# =============================================================
+# Starts the HF band scanner at 6am MST (1pm UTC) daily.
+# Sends a Telegram notification with the scan order and monitors
+# band changes throughout the day.
+#
+# Triggers:
+#   - Schedule: cron 0 13 * * * (6am MST / 1pm UTC)
+#   - API: on-demand via POST /agents/band-scanner/run
+# =============================================================
+
+name: band-scanner
+display_name: Band Scanner
+
+description: >
+  Manages the HF band scanner for W0ABE's SDR Console. Starts
+  scanning at 6am MST, reports the band order based on current
+  propagation and DX activity, and monitors for notable changes.
+
+model: llama3.1:8b
+
+system_prompt: >
+  You manage the band scanner for W0ABE's SDR Console station.
+  Start scanning at 6am MST, stop at 9pm MST. Report band changes
+  and notable activity. Be concise.
+
+  WHEN TRIGGERED BY SCHEDULE (6am MST):
+  1. Call the radio scanner start API to begin scanning
+  2. Send a Telegram notification with the scan order
+  3. Include current propagation conditions in the message
+
+  WHEN TRIGGERED BY API:
+  1. Check current scanner status first
+  2. If not running, start it
+  3. Report current status via Telegram
+
+  IMPORTANT:
+  - Be concise — one short Telegram message
+  - Include the band order in the start notification
+  - Do NOT send repeated status updates
+
+tools:
+  - name: call_api
+    description: Control the band scanner and check propagation
+    config:
+      endpoints:
+        scanner_start: "http://localhost:8100/radio/scanner/start"
+        scanner_stop: "http://localhost:8100/radio/scanner/stop"
+        scanner_status: "http://localhost:8100/radio/scanner/status"
+        propagation: "http://localhost:8100/propagation"
+
+  - name: send_telegram
+    description: Notify operator about scanner activity
+    config: {}
+
+triggers:
+  - type: schedule
+    cron: "0 13 * * *"
+    config:
+      description: Start scanning at 6am MST (1pm UTC)
+
+  - type: api
+    config:
+      description: On-demand via POST /agents/band-scanner/run
+
+output_channels:
+  - telegram
+  - mqtt
+  - log
+
+config:
+  scan_start_utc: 13
+  scan_stop_utc: 4
+
+enabled: true
+max_concurrent: 1
+timeout_seconds: 60

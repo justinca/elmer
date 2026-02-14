@@ -49,6 +49,7 @@ from .handlers.agents import (
     handle_agent_callback,
 )
 from .handlers.radio import (
+    cmd_band,
     cmd_bands,
     cmd_contest,
     cmd_dx,
@@ -59,8 +60,10 @@ from .handlers.radio import (
     cmd_plan,
     cmd_pota,
     cmd_prop,
+    cmd_scan,
     cmd_solar,
     cmd_spots,
+    cmd_tune,
 )
 from .handlers.notifications import NotificationManager
 from .handlers.transcription import (
@@ -116,6 +119,8 @@ async def post_init(application: Application) -> None:
         BotCommand("pota", "POTA spots or park info"),
         BotCommand("dxcc", "DXCC award progress"),
         BotCommand("contest", "Upcoming contests"),
+        BotCommand("scan", "Band scanner [start|stop|pause|next]"),
+        BotCommand("tune", "Tune to frequency (kHz)"),
         BotCommand("status", "System status summary"),
         BotCommand("agents", "List all agents"),
         BotCommand("search", "Search knowledge base"),
@@ -221,6 +226,9 @@ def main() -> None:
         "log": cmd_log,
         "dxcc": cmd_dxcc,
         "contest": cmd_contest,
+        "scan": cmd_scan,
+        "tune": cmd_tune,
+        "band": cmd_band,
     }
     for name, handler_fn in commands.items():
         app.add_handler(CommandHandler(name, handler_fn, filters=user_filter))

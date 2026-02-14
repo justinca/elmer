@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routes import agents, chat, contest, docs, dx, health, homeassistant, knowledge, llm, log, meshtastic, nodes, notes, pota, propagation, transcription
+from .routes import agents, chat, contest, docs, dx, health, homeassistant, knowledge, llm, log, meshtastic, nodes, notes, pota, propagation, radio, transcription
 from .services import autodoc, db, mqtt_service
 from .services.autodoc import SystemDocumentor
 from .services.scheduler import create_scheduler
@@ -160,6 +160,7 @@ app.include_router(dx.router)
 app.include_router(log.router)
 app.include_router(pota.router)
 app.include_router(contest.router)
+app.include_router(radio.router)
 app.include_router(homeassistant.router)
 app.include_router(meshtastic.router)
 
