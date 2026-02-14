@@ -72,7 +72,7 @@ def transcribe(audio_path: str | Path) -> dict:
             "start": round(segment.start, 3),
             "end": round(segment.end, 3),
             "text": segment.text.strip(),
-            "confidence": round(segment.avg_log_prob, 4),
+            "confidence": round(segment.avg_logprob, 4),
         })
         full_text_parts.append(segment.text.strip())
 
