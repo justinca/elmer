@@ -70,8 +70,8 @@ def diarize(audio_path: str | Path) -> list[dict]:
     waveform = torch.from_numpy(data)
     result = pipeline({"waveform": waveform, "sample_rate": sample_rate})
 
-    # pyannote 3.3+ returns DiarizeOutput; extract the Annotation object
-    annotation = getattr(result, "annotation", result)
+    # pyannote 4.x returns DiarizeOutput; 3.x returns Annotation directly
+    annotation = getattr(result, "speaker_diarization", result)
 
     speaker_segments = []
     for turn, _, speaker in annotation.itertracks(yield_label=True):
