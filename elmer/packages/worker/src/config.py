@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     # Speaker diarization (pyannote.audio)
     DIARIZE_MODEL: str = "pyannote/speaker-diarization-3.1"
-    DIARIZE_DEVICE: str = "cpu"
+    DIARIZE_DEVICE: str = "cuda"
     HF_TOKEN: str = ""  # Only needed for first model download
 
     # Obsidian vault path on this Windows machine

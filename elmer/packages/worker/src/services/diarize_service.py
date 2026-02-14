@@ -1,7 +1,6 @@
 """Speaker diarization service using pyannote.audio.
 
-Lazy-loads the pipeline on first request. Runs on CPU to avoid
-GPU memory conflicts with Whisper and Ollama.
+Lazy-loads the pipeline on first request.
 """
 
 import logging
@@ -69,10 +68,13 @@ def diarize(audio_path: str | Path) -> list[dict]:
     else:
         data = data.T  # (channels, samples)
     waveform = torch.from_numpy(data)
-    diarization = pipeline({"waveform": waveform, "sample_rate": sample_rate})
+    result = pipeline({"waveform": waveform, "sample_rate": sample_rate})
+
+    # pyannote 3.3+ returns DiarizeOutput; extract the Annotation object
+    annotation = getattr(result, "annotation", result)
 
     speaker_segments = []
-    for turn, _, speaker in diarization.itertracks(yield_label=True):
+    for turn, _, speaker in annotation.itertracks(yield_label=True):
         speaker_segments.append({
             "speaker": speaker,
             "start": round(turn.start, 3),

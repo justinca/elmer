@@ -39,7 +39,7 @@ def render() -> None:
         suffix = uploaded.name.rsplit(".", 1)[-1].lower() if "." in uploaded.name else "wav"
         mime = MIME_MAP.get(suffix, "application/octet-stream")
 
-        diarize = st.checkbox("Enable speaker diarization", value=False)
+        diarize = st.checkbox("Enable speaker diarization", value=True)
 
         if st.button("Transcribe", type="primary"):
             file_bytes = uploaded.read()

@@ -11,3 +11,4 @@ nvidia-cublas-cu12
 nvidia-cudnn-cu12
 tzdata
 pyannote.audio>=3.1.0
+soundfile>=0.12.0
