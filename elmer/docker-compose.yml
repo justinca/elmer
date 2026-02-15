@@ -86,7 +86,7 @@ services:
 
   # --------------------------------------------------------
   # Dashboard UI — React web dashboard
-  # Binds to port 3000 on the host
+  # Binds to port 3001 on the host
   # --------------------------------------------------------
   elmer-dashboard-ui:
     build:
@@ -96,7 +96,7 @@ services:
     network_mode: host
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/"]
       interval: 30s
       timeout: 5s
       retries: 3
