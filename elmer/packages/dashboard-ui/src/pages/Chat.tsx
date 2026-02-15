@@ -275,7 +275,7 @@ function Chat() {
   const isWelcome = messages.length === 0 && !activeConvoId
 
   return (
-    <div className="flex flex-1 min-h-0 overflow-hidden">
+    <div className="flex h-full w-full overflow-hidden">
       {/* Left panel -- Conversation list */}
       <div
         className={cn(
@@ -296,7 +296,7 @@ function Chat() {
       </div>
 
       {/* Center -- Chat area */}
-      <div className="flex min-w-0 min-h-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Toolbar */}
         <div className="flex items-center gap-2 border-b px-4 py-2">
           <Button
@@ -324,7 +324,7 @@ function Chat() {
         </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 min-h-0" ref={scrollAreaRef}>
+        <ScrollArea className="flex-1" ref={scrollAreaRef}>
           <div className="mx-auto max-w-3xl space-y-6 p-4">
             {isWelcome ? (
               <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">

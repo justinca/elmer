@@ -63,10 +63,12 @@ export function AppLayout() {
 
         {/* Page content */}
         {isFullBleed ? (
-          <div className="flex flex-1 min-h-0 flex-col">
-            <Suspense fallback={<LoadingSpinner label="Loading..." />}>
-              <Outlet />
-            </Suspense>
+          <div className="relative flex-1">
+            <div className="absolute inset-0 flex">
+              <Suspense fallback={<LoadingSpinner label="Loading..." />}>
+                <Outlet />
+              </Suspense>
+            </div>
           </div>
         ) : (
           <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
