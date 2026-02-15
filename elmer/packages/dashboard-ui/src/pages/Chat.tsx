@@ -63,8 +63,10 @@ function Chat() {
   const [input, setInput] = useState("")
   const [sending, setSending] = useState(false)
 
-  // Model selection
-  const [selectedModel, setSelectedModel] = useState("")
+  // Model selection — persist to localStorage
+  const [selectedModel, setSelectedModel] = useState(() => {
+    return localStorage.getItem("elmer-chat-model") || ""
+  })
 
   // Settings
   const [webSearch, setWebSearch] = useState<WebSearchMode>("auto")
@@ -79,12 +81,18 @@ function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
 
-  // Set default model when models load
+  // Set default model when models load, persist selection
   useEffect(() => {
     if (models.length > 0 && !selectedModel) {
       setSelectedModel(models[0].name)
     }
   }, [models, selectedModel])
+
+  useEffect(() => {
+    if (selectedModel) {
+      localStorage.setItem("elmer-chat-model", selectedModel)
+    }
+  }, [selectedModel])
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -267,7 +275,7 @@ function Chat() {
   const isWelcome = messages.length === 0 && !activeConvoId
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       {/* Left panel -- Conversation list */}
       <div
         className={cn(

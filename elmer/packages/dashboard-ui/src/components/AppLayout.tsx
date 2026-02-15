@@ -34,6 +34,8 @@ export function AppLayout() {
     return () => window.removeEventListener("keydown", handler)
   }, [])
 
+  const isFullBleed = location.pathname === "/chat"
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Desktop sidebar */}
@@ -55,12 +57,15 @@ export function AppLayout() {
         {/* Page content */}
         <div
           className={cn(
-            "flex-1 overflow-y-auto p-4 md:p-6",
+            "flex-1",
+            isFullBleed
+              ? "flex flex-col overflow-hidden"
+              : "overflow-y-auto p-4 md:p-6",
           )}
         >
           <Suspense fallback={<LoadingSpinner label="Loading..." />}>
-            <div key={location.pathname} className="animate-in fade-in duration-150">
-              <Breadcrumbs />
+            <div key={location.pathname} className={cn("animate-in fade-in duration-150", isFullBleed && "flex flex-1 flex-col overflow-hidden")}>
+              {!isFullBleed && <Breadcrumbs />}
               <Outlet />
             </div>
           </Suspense>
