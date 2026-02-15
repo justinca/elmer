@@ -93,9 +93,14 @@ function Chat() {
     }
   }, [selectedModel])
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom when messages change — use scrollTop on the
+  // container instead of scrollIntoView which bubbles up and shifts
+  // parent layout when content doesn't overflow yet
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    const el = scrollAreaRef.current
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" })
+    }
   }, [messages, sending])
 
   // Load a conversation's messages
