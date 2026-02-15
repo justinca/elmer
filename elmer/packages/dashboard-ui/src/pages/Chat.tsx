@@ -15,7 +15,6 @@ import { WebSearchToggle } from "@/components/chat/WebSearchToggle"
 import { ModelSelector } from "@/components/chat/ModelSelector"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Bot, MessageSquare, PanelRightClose, PanelRightOpen, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react"
 
 type WebSearchMode = "auto" | "force" | "off"
@@ -324,47 +323,45 @@ function Chat() {
         </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1" ref={scrollAreaRef}>
-          <div className="mx-auto max-w-3xl space-y-6 p-4">
-            {isWelcome ? (
-              <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                  <Bot className="h-8 w-8 text-primary" />
-                </div>
-                <h2 className="mb-2 text-xl font-semibold">Elmer Chat</h2>
-                <p className="mb-8 max-w-md text-sm text-muted-foreground">
-                  Ask questions about your knowledge base, notes, radio logs, and more.
-                  Elmer uses RAG to search your data and can browse the web.
-                </p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {SUGGESTIONS.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => handleSuggestion(s)}
-                      className="flex items-start gap-2 rounded-lg border p-3 text-left text-sm transition-colors hover:bg-accent"
-                    >
-                      <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                      {s}
-                    </button>
-                  ))}
-                </div>
+        <div className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
+          {isWelcome ? (
+            <div className="flex h-full flex-col items-center justify-center p-4 text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                <Bot className="h-8 w-8 text-primary" />
               </div>
-            ) : (
-              <>
-                {messages.map((msg) => (
-                  <MessageBubble
-                    key={msg.id}
-                    message={msg}
-                    onShowSources={handleShowSources}
-                    onRetry={msg.error ? handleRetry : undefined}
-                  />
+              <h2 className="mb-2 text-xl font-semibold">Elmer Chat</h2>
+              <p className="mb-8 max-w-md text-sm text-muted-foreground">
+                Ask questions about your knowledge base, notes, radio logs, and more.
+                Elmer uses RAG to search your data and can browse the web.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => handleSuggestion(s)}
+                    className="flex items-start gap-2 rounded-lg border p-3 text-left text-sm transition-colors hover:bg-accent"
+                  >
+                    <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    {s}
+                  </button>
                 ))}
-                {sending && <TypingIndicator />}
-              </>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        </ScrollArea>
+              </div>
+            </div>
+          ) : (
+            <div className="mx-auto max-w-3xl space-y-6 p-4">
+              {messages.map((msg) => (
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  onShowSources={handleShowSources}
+                  onRetry={msg.error ? handleRetry : undefined}
+                />
+              ))}
+              {sending && <TypingIndicator />}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
 
         {/* Input area */}
         <div className="border-t bg-background p-4">
