@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     ELMER_LOG4OM_DB_PATH: str = ""
 
     # OmniRig / Band Scanner
-    OMNIRIG_RIG_NUMBER: int = 1
+    OMNIRIG_RIG_NUMBER: int = 2
     SCANNER_DWELL_SECONDS: int = 900
     SCANNER_DAYTIME_START_UTC: int = 13   # 1pm UTC = 6am MST
     SCANNER_DAYTIME_END_UTC: int = 4      # 4am UTC = 9pm MST
