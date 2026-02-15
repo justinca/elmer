@@ -42,14 +42,6 @@ class Settings(BaseSettings):
     # Log4OM SQLite database path (read-only access)
     ELMER_LOG4OM_DB_PATH: str = ""
 
-    # CAT Control / Band Scanner
-    CAT_COM_PORT: str = "COM11"    # Virtual COM port (com0com) to SDR Console
-    CAT_BAUD_RATE: int = 57600     # Baud rate for CAT serial port
-    SCANNER_DWELL_SECONDS: int = 900
-    SCANNER_DAYTIME_START_UTC: int = 13   # 1pm UTC = 6am MST
-    SCANNER_DAYTIME_END_UTC: int = 4      # 4am UTC = 9pm MST
-    SCANNER_AUTO_START: bool = False
-
     @property
     def ollama_base_url(self) -> str:
         return f"http://{self.ELMER_OLLAMA_HOST}:{self.ELMER_OLLAMA_PORT}"

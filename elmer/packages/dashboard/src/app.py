@@ -12,7 +12,7 @@ st.set_page_config(
 # -- Navigation groups --------------------------------------------------------
 
 _NAV_GROUPS = [
-    ("Radio", ["Propagation", "DX Spots", "Log Analysis", "POTA", "Contests", "Radio Control"]),
+    ("Radio", ["Propagation", "DX Spots", "Log Analysis", "POTA", "Contests"]),
     ("System", ["System Status", "Services", "Event Log"]),
     ("Knowledge", ["Knowledge Base", "Notes", "Transcriptions", "Chat"]),
     ("Agents", ["Agents", "Agent Builder", "Agent Runs", "Orchestrator"]),
@@ -94,10 +94,6 @@ elif page == "POTA":
 
 elif page == "Contests":
     from pages.contest import render
-    render()
-
-elif page == "Radio Control":
-    from pages.radio_control import render
     render()
 
 # System group.
