@@ -56,33 +56,34 @@ services:
       start_period: 15s
 
   # --------------------------------------------------------
-  # Dashboard — Streamlit web UI
+  # Dashboard — Streamlit web UI (DEPRECATED: replaced by dashboard-ui)
+  # Kept for reference; remove once React dashboard is stable.
   # Binds to port 8501 on the host
   # --------------------------------------------------------
-  elmer-dashboard:
-    build:
-      context: ./packages/dashboard
-      dockerfile: Dockerfile
-    container_name: elmer-dashboard
-    network_mode: host
-    env_file: .env
-    environment:
-      TZ: America/Denver
-      ELMER_CORE_HOST: localhost
-    restart: unless-stopped
-    healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import urllib.request; urllib.request.urlopen('http://localhost:8501/')"
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    depends_on:
-      elmer-core:
-        condition: service_healthy
+  # elmer-dashboard:
+  #   build:
+  #     context: ./packages/dashboard
+  #     dockerfile: Dockerfile
+  #   container_name: elmer-dashboard
+  #   network_mode: host
+  #   env_file: .env
+  #   environment:
+  #     TZ: America/Denver
+  #     ELMER_CORE_HOST: localhost
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test:
+  #       - CMD
+  #       - python
+  #       - -c
+  #       - "import urllib.request; urllib.request.urlopen('http://localhost:8501/')"
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 10s
+  #   depends_on:
+  #     elmer-core:
+  #       condition: service_healthy
 
   # --------------------------------------------------------
   # Dashboard UI — React web dashboard

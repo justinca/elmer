@@ -2,7 +2,8 @@
        build restart status test test-pipeline clean shell-core db-shell init-db \
        sync-notes ingest-docs search chat transcribe sync-env \
        agents agent-run agent-logs agent-reload test-agents \
-       prop spots dx pota dxcc test-radio
+       prop spots dx pota dxcc test-radio \
+       dashboard dashboard-dev dashboard-build logs-dashboard-ui
 
 CORE_URL ?= http://localhost:8100
 
@@ -142,6 +143,20 @@ dxcc:
 
 test-radio:
 	@python3 scripts/test-radio.py
+
+# ── Dashboard UI ────────────────────────────────────────
+
+dashboard:
+	docker compose up -d elmer-dashboard-ui
+
+dashboard-dev:
+	cd packages/dashboard-ui && npm run dev
+
+dashboard-build:
+	cd packages/dashboard-ui && npm run build
+
+logs-dashboard-ui:
+	docker compose logs -f elmer-dashboard-ui
 
 # ── Database ─────────────────────────────────────────────────
 

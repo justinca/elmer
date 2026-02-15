@@ -1,28 +1,15 @@
-import { useEffect, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { getHealth } from "@/lib/api"
+import { queryKeys } from "@/lib/queryKeys"
+import { STALE_TIMES } from "@/lib/queryClient"
 
 export function useConnectionStatus() {
-  const [connected, setConnected] = useState(true)
-
-  useEffect(() => {
-    let active = true
-
-    const check = async () => {
-      try {
-        await getHealth()
-        if (active) setConnected(true)
-      } catch {
-        if (active) setConnected(false)
-      }
-    }
-
-    check()
-    const id = setInterval(check, 30000)
-    return () => {
-      active = false
-      clearInterval(id)
-    }
-  }, [])
-
-  return connected
+  const { isSuccess } = useQuery({
+    queryKey: queryKeys.health.core(),
+    queryFn: () => getHealth().then((r) => r.data),
+    staleTime: STALE_TIMES.health,
+    refetchInterval: 30_000,
+    retry: 1,
+  })
+  return isSuccess
 }

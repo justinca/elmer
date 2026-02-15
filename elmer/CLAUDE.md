@@ -42,6 +42,14 @@
 - Radio agents: dx-spotter, pota-advisor, contest-coach (disabled), band-monitor (disabled)
 - Station: W0ABE, DN70, IC-7300, FT-DX10, FT-710 Field, DX Commander vertical
 
+## Dashboard UI (React)
+- Package: packages/dashboard-ui/
+- Tech: React 19, TypeScript, Vite 7, Tailwind CSS v4, shadcn/ui, Recharts, TanStack Query
+- Dev: make dashboard-dev (port 5173, proxies /api → localhost:8100)
+- Prod: Docker nginx port 3001, proxies /api → localhost:8100
+- State: TanStack Query for server state, useState for UI state
+- Build: make dashboard-build, then docker compose up -d --build elmer-dashboard-ui
+
 ## Known Issues
 - OLLAMA_HOST env var is set system-wide on Windows to 0.0.0.0:11434
   so worker config uses ELMER_OLLAMA_HOST to avoid collision

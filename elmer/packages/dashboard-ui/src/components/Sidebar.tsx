@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useConnectionStatus } from "@/hooks/useConnectionStatus"
+import { NotificationBell } from "./NotificationBell"
 
 interface SidebarProps {
   collapsed: boolean
@@ -32,6 +33,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold text-primary">Elmer</span>
             <StatusDot status={connected ? "healthy" : "down"} size="sm" />
+            <div className="ml-auto">
+              <NotificationBell />
+            </div>
           </div>
         )}
         {collapsed && (

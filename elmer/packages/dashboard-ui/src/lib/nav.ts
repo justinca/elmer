@@ -1,5 +1,6 @@
 import {
   Activity,
+  AudioLines,
   Bot,
   BookOpen,
   Radio,
@@ -7,10 +8,15 @@ import {
   MessageSquare,
   FileText,
   Search,
+  StickyNote,
   Antenna,
   Globe,
   Trophy,
   BarChart3,
+  Wrench,
+  PlayCircle,
+  Cpu,
+  Server,
   type LucideIcon,
 } from "lucide-react"
 
@@ -31,12 +37,15 @@ export const navigation: NavGroup[] = [
     items: [
       { label: "Status", path: "/", icon: LayoutDashboard },
       { label: "Events", path: "/events", icon: Activity },
+      { label: "Services", path: "/services", icon: Server },
     ],
   },
   {
     label: "Knowledge",
     items: [
       { label: "Documents", path: "/documents", icon: FileText },
+      { label: "Notes", path: "/notes", icon: StickyNote },
+      { label: "Transcriptions", path: "/transcriptions", icon: AudioLines },
       { label: "Search", path: "/search", icon: Search },
       { label: "Chat", path: "/chat", icon: MessageSquare },
     ],
@@ -45,6 +54,9 @@ export const navigation: NavGroup[] = [
     label: "Agents",
     items: [
       { label: "Agents", path: "/agents", icon: Bot },
+      { label: "Builder", path: "/agents/builder", icon: Wrench },
+      { label: "Runs", path: "/agents/runs", icon: PlayCircle },
+      { label: "Orchestrator", path: "/agents/orchestrator", icon: Cpu },
     ],
   },
   {
