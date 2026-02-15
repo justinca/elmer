@@ -46,9 +46,17 @@ class DwellRequest(BaseModel):
 async def radio_status():
     """CAT connection status, current frequency and mode."""
     rc = get_radio_control()
-    if not rc.connected:
-        rc.connect()
     return rc.get_status()
+
+
+@router.post("/connect")
+async def radio_connect():
+    """Attempt to (re)connect the CAT serial port."""
+    rc = get_radio_control()
+    result = rc.connect()
+    if not result.get("connected"):
+        raise HTTPException(status_code=503, detail=result.get("error", "Connection failed"))
+    return result
 
 
 @router.post("/frequency")
@@ -56,7 +64,7 @@ async def set_frequency(req: FrequencyRequest):
     """Set VFO-A frequency."""
     rc = get_radio_control()
     if not rc.connected:
-        rc.connect()
+        raise HTTPException(status_code=503, detail="CAT not connected")
     result = rc.set_frequency(req.frequency_hz)
     if not result.get("ok"):
         raise HTTPException(status_code=500, detail=result.get("error", "Failed"))
@@ -68,7 +76,7 @@ async def set_mode(req: ModeRequest):
     """Set operating mode (USB, LSB, CW, AM, FM)."""
     rc = get_radio_control()
     if not rc.connected:
-        rc.connect()
+        raise HTTPException(status_code=503, detail="CAT not connected")
     result = rc.set_mode(req.mode)
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result.get("error", "Failed"))

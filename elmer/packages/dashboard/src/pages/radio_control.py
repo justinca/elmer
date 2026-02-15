@@ -27,7 +27,7 @@ def _render_data() -> None:
 
     st.subheader("SDR Console")
     if radio is None:
-        st.warning("Could not reach radio control service.")
+        st.warning("Could not reach Worker — is it running?")
     else:
         c1, c2, c3, c4 = st.columns(4)
         connected = radio.get("connected", False)
@@ -45,6 +45,10 @@ def _render_data() -> None:
                 f'<b style="color:{color};">{label}</b></div>',
                 unsafe_allow_html=True,
             )
+            if not connected:
+                if st.button("Connect", key="cat_connect", type="primary"):
+                    api.radio_connect()
+                    st.rerun()
         with c2:
             freq_display = f"{freq / 1_000_000:.6f} MHz" if freq else "---"
             st.markdown(

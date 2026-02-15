@@ -77,6 +77,12 @@ async def radio_status():
     return await _proxy_get("/status")
 
 
+@router.post("/connect")
+async def radio_connect():
+    """Attempt to (re)connect the CAT serial port."""
+    return await _proxy_post("/connect")
+
+
 @router.post("/frequency")
 async def set_frequency(request: Request):
     """Set VFO-A frequency.  Body: {"frequency_hz": 14074000}"""

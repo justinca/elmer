@@ -525,6 +525,10 @@ class ElmerAPI:
         """GET /radio/status -- CAT connection, freq, mode."""
         return self._get("/radio/status")
 
+    def radio_connect(self) -> dict[str, Any] | None:
+        """POST /radio/connect -- (re)connect the CAT serial port."""
+        return self._post("/radio/connect")
+
     def set_radio_frequency(self, freq_hz: int) -> dict[str, Any] | None:
         """POST /radio/frequency."""
         return self._post("/radio/frequency", json={"frequency_hz": freq_hz})
