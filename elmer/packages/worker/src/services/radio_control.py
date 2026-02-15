@@ -1,7 +1,12 @@
-"""Kenwood TS-2000 CAT control for SDR Console.
+"""Kenwood TS-2000 CAT control for SDR Console via virtual serial port.
 
-Sends CAT commands over TCP to SDR Console, which emulates a Kenwood
-TS-2000.  No COM/OmniRig dependency — just a plain TCP socket.
+Sends CAT commands over a virtual COM port (com0com) to SDR Console,
+which emulates a Kenwood TS-2000.
+
+Setup:
+  1. Create a com0com port pair (e.g. COM10 <-> COM11)
+  2. Configure SDR Console CAT to use COM10, 57600 baud, 8N1, Kenwood TS-2000
+  3. Set CAT_COM_PORT=COM11 in Worker .env (the other end of the pair)
 
 TS-2000 CAT command reference (subset used here):
   FA00014074000;   Set VFO-A frequency (11-digit Hz)
@@ -12,9 +17,10 @@ TS-2000 CAT command reference (subset used here):
 """
 
 import logging
-import socket
 import threading
 from typing import Any
+
+import serial
 
 logger = logging.getLogger("elmer.radio_control")
 
@@ -30,65 +36,84 @@ _MODE_TO_CAT: dict[str, str] = {
 
 _CAT_TO_MODE: dict[str, str] = {v: k for k, v in _MODE_TO_CAT.items()}
 
-# Socket timeout for CAT commands.
-_SOCK_TIMEOUT = 3.0
+# Serial read timeout (seconds).
+_SERIAL_TIMEOUT = 3.0
 
 
 class RadioControl:
-    """CAT control interface to SDR Console (TS-2000 emulation) over TCP."""
+    """CAT control interface to SDR Console (TS-2000 emulation) over serial."""
 
-    def __init__(self, host: str = "localhost", port: int = 7356) -> None:
-        self._host = host
+    def __init__(self, port: str = "COM11", baud: int = 57600) -> None:
         self._port = port
+        self._baud = baud
         self._connected = False
         self._rig_id: str = ""
         self._lock = threading.Lock()
+        self._ser: serial.Serial | None = None
 
     # ------------------------------------------------------------------
     # Low-level CAT I/O
     # ------------------------------------------------------------------
 
-    def _send_cmd(self, cmd: str) -> str:
-        """Send a CAT command and return the response.
+    def _open(self) -> serial.Serial:
+        """Return the open serial connection, creating it if needed."""
+        if self._ser is not None and self._ser.is_open:
+            return self._ser
+        self._ser = serial.Serial(
+            port=self._port,
+            baudrate=self._baud,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=_SERIAL_TIMEOUT,
+        )
+        logger.info("Serial port %s opened at %d baud", self._port, self._baud)
+        return self._ser
 
-        Opens a fresh TCP connection for each command to avoid stale
-        socket issues with SDR Console's CAT server.
-        """
+    def _close(self) -> None:
+        """Close the serial connection."""
+        if self._ser is not None and self._ser.is_open:
+            try:
+                self._ser.close()
+            except Exception:
+                pass
+        self._ser = None
+
+    def _send_cmd(self, cmd: str) -> str:
+        """Send a CAT command and return the response (up to semicolon)."""
         with self._lock:
             try:
-                with socket.create_connection(
-                    (self._host, self._port), timeout=_SOCK_TIMEOUT
-                ) as sock:
-                    sock.sendall(cmd.encode("ascii"))
+                ser = self._open()
+                ser.write(cmd.encode("ascii"))
 
-                    # Read until we get a semicolon terminator.
-                    buf = b""
-                    while b";" not in buf:
-                        chunk = sock.recv(256)
-                        if not chunk:
-                            break
-                        buf += chunk
+                # Read until we get a semicolon terminator.
+                buf = b""
+                while b";" not in buf:
+                    chunk = ser.read(1)
+                    if not chunk:
+                        break  # timeout
+                    buf += chunk
 
-                    resp = buf.decode("ascii").strip()
-                    logger.debug("CAT %s -> %s", cmd.rstrip(";"), resp)
-                    return resp
+                resp = buf.decode("ascii").strip()
+                logger.debug("CAT %s -> %s", cmd.rstrip(";"), resp)
+                return resp
 
-            except (OSError, socket.timeout) as exc:
+            except (OSError, serial.SerialException) as exc:
                 logger.error("CAT command '%s' failed: %s", cmd.rstrip(";"), exc)
                 self._connected = False
+                self._close()
                 raise
 
     def _send_cmd_no_reply(self, cmd: str) -> None:
         """Send a CAT set-command that has no response."""
         with self._lock:
             try:
-                with socket.create_connection(
-                    (self._host, self._port), timeout=_SOCK_TIMEOUT
-                ) as sock:
-                    sock.sendall(cmd.encode("ascii"))
-            except (OSError, socket.timeout) as exc:
+                ser = self._open()
+                ser.write(cmd.encode("ascii"))
+            except (OSError, serial.SerialException) as exc:
                 logger.error("CAT command '%s' failed: %s", cmd.rstrip(";"), exc)
                 self._connected = False
+                self._close()
                 raise
 
     # ------------------------------------------------------------------
@@ -102,22 +127,27 @@ class RadioControl:
             # TS-2000 returns "ID019;"
             self._rig_id = resp.replace(";", "")
             self._connected = True
-            logger.info("CAT connected to %s:%d (ID=%s)", self._host, self._port, self._rig_id)
+            logger.info("CAT connected on %s (ID=%s)", self._port, self._rig_id)
             return {
                 "connected": True,
-                "host": self._host,
                 "port": self._port,
+                "baud": self._baud,
                 "rig_id": self._rig_id,
             }
         except Exception as exc:
             self._connected = False
-            logger.error("CAT connection failed to %s:%d: %s", self._host, self._port, exc)
+            logger.error("CAT connection failed on %s: %s", self._port, exc)
             return {
                 "connected": False,
-                "host": self._host,
                 "port": self._port,
+                "baud": self._baud,
                 "error": str(exc),
             }
+
+    def disconnect(self) -> None:
+        """Close the serial port."""
+        self._close()
+        self._connected = False
 
     # ------------------------------------------------------------------
     # Frequency
@@ -179,8 +209,8 @@ class RadioControl:
         if not self._connected:
             return {
                 "connected": False,
-                "host": self._host,
                 "port": self._port,
+                "baud": self._baud,
                 "rig_id": self._rig_id,
                 "frequency_hz": None,
                 "mode": None,
@@ -189,8 +219,8 @@ class RadioControl:
         mode = self.get_mode()
         return {
             "connected": self._connected,
-            "host": self._host,
             "port": self._port,
+            "baud": self._baud,
             "rig_id": self._rig_id,
             "frequency_hz": freq,
             "mode": mode,
@@ -208,9 +238,9 @@ class RadioControl:
 _instance: RadioControl | None = None
 
 
-def get_radio_control(host: str = "localhost", port: int = 7356) -> RadioControl:
+def get_radio_control(port: str = "COM11", baud: int = 57600) -> RadioControl:
     """Return the shared RadioControl instance."""
     global _instance
     if _instance is None:
-        _instance = RadioControl(host, port)
+        _instance = RadioControl(port, baud)
     return _instance

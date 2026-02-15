@@ -1,7 +1,8 @@
 """Radio control proxy — forwards requests to the Worker's /radio/ endpoints.
 
-The Worker controls SDR Console via OmniRig on the Windows machine.
-Core acts as a gateway so dashboard, Telegram, and agents can reach it.
+The Worker controls SDR Console via virtual serial port (com0com) on the
+Windows machine.  Core acts as a gateway so dashboard, Telegram, and agents
+can reach it.
 """
 
 import logging
@@ -72,7 +73,7 @@ async def _proxy_post(path: str, body: dict | None = None, timeout: float = _WOR
 
 @router.get("/status")
 async def radio_status():
-    """OmniRig status — frequency, mode, connection."""
+    """Radio CAT status — frequency, mode, connection."""
     return await _proxy_get("/status")
 
 

@@ -522,7 +522,7 @@ class ElmerAPI:
     # -- Radio Control / Band Scanner ----------------------------------------
 
     def get_radio_status(self) -> dict[str, Any] | None:
-        """GET /radio/status -- OmniRig connection, freq, mode."""
+        """GET /radio/status -- CAT connection, freq, mode."""
         return self._get("/radio/status")
 
     def set_radio_frequency(self, freq_hz: int) -> dict[str, Any] | None:

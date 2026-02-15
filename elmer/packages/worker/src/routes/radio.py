@@ -1,6 +1,6 @@
 """Radio control and band scanner endpoints.
 
-Exposes OmniRig radio control and the HF band scanner via REST.
+Exposes CAT radio control and the HF band scanner via REST.
 """
 
 import logging
@@ -44,7 +44,7 @@ class DwellRequest(BaseModel):
 
 @router.get("/status")
 async def radio_status():
-    """OmniRig connection status, current frequency and mode."""
+    """CAT connection status, current frequency and mode."""
     rc = get_radio_control()
     if not rc.connected:
         rc.connect()

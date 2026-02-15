@@ -115,15 +115,15 @@ make agent-run A=radio-assistant
 
 ## Band Scanner (`band-scanner` / `band-scanner-stop`)
 
-Automated HF band scanner that controls SDR Console via OmniRig on the
-Windows machine. Cycles through bands high-to-low, dwelling on each band's
-FT8 calling frequency for 15 minutes (configurable).
+Automated HF band scanner that controls SDR Console via virtual serial port
+(com0com) on the Windows machine. Cycles through bands high-to-low, dwelling
+on each band's FT8 calling frequency for 15 minutes (configurable).
 
 **How it works:**
 1. `band-scanner` agent starts the scanner at 6am MST (13:00 UTC) daily
 2. Scanner selects daytime or nighttime bands based on UTC hour
 3. Bands are prioritized by propagation conditions and DX spot activity
-4. Radio is tuned via Kenwood TS-2000 CAT commands over TCP to SDR Console
+4. Radio is tuned via Kenwood TS-2000 CAT commands over virtual serial port to SDR Console
 5. `band-scanner-stop` agent stops it at 9pm MST (04:00 UTC)
 
 **Band lists:**
@@ -146,10 +146,15 @@ FT8 calling frequency for 15 minutes (configurable).
 than 5 kHz from expected), the scanner pauses automatically and publishes
 an MQTT notification to `elmer/radio/scanner-paused`.
 
+**Setup (com0com virtual serial port):**
+1. Create a com0com port pair (e.g. COM10 ↔ COM11)
+2. In SDR Console → Options → CAT to Radio: select COM10, 57600 baud, Kenwood TS-2000
+3. Set `CAT_COM_PORT=COM11` in Worker .env (the other end of the pair)
+
 **Configuration (Worker .env):**
 ```
-CAT_HOST=localhost            # SDR Console CAT TCP host
-CAT_PORT=7356                 # SDR Console CAT TCP port
+CAT_COM_PORT=COM11            # Virtual COM port (com0com) to SDR Console
+CAT_BAUD_RATE=57600           # Baud rate for CAT serial port
 SCANNER_DWELL_SECONDS=900     # Default dwell time (15 min)
 SCANNER_DAYTIME_START_UTC=13  # 6am MST
 SCANNER_DAYTIME_END_UTC=4     # 9pm MST

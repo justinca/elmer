@@ -118,16 +118,16 @@ async def lifespan(app: FastAPI):
     )
     heartbeat.start()
 
-    # Connect CAT radio control (non-fatal).
+    # Connect CAT radio control via serial port (non-fatal).
     try:
         from .services.radio_control import get_radio_control
 
-        rc = get_radio_control(settings.CAT_HOST, settings.CAT_PORT)
+        rc = get_radio_control(settings.CAT_COM_PORT, settings.CAT_BAUD_RATE)
         result = rc.connect()
         if result.get("connected"):
-            logger.info("CAT connected to %s:%d (%s)", settings.CAT_HOST, settings.CAT_PORT, result.get("rig_id"))
+            logger.info("CAT connected on %s (%s)", settings.CAT_COM_PORT, result.get("rig_id"))
         else:
-            logger.warning("CAT not available at %s:%d: %s", settings.CAT_HOST, settings.CAT_PORT, result.get("error"))
+            logger.warning("CAT not available on %s: %s", settings.CAT_COM_PORT, result.get("error"))
     except Exception as exc:
         logger.warning("CAT init skipped: %s", exc)
 

@@ -121,7 +121,7 @@ class BandScanner:
         if not self._radio.connected:
             result = self._radio.connect()
             if not result.get("connected"):
-                return {"ok": False, "error": "OmniRig not connected", "detail": result}
+                return {"ok": False, "error": "CAT not connected", "detail": result}
 
         self._scan_order = bands or self._build_scan_order()
         if not self._scan_order:
