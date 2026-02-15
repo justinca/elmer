@@ -30,7 +30,13 @@ from .handlers.basic import (
     cmd_start,
     cmd_status,
 )
-from .handlers.chat import handle_message, handle_photo
+from .handlers.chat import (
+    cmd_searchmode,
+    cmd_web,
+    cmd_websearch,
+    handle_message,
+    handle_photo,
+)
 from .handlers.knowledge import (
     cmd_note,
     cmd_notes,
@@ -119,6 +125,8 @@ async def post_init(application: Application) -> None:
         BotCommand("status", "System status summary"),
         BotCommand("agents", "List all agents"),
         BotCommand("search", "Search knowledge base"),
+        BotCommand("websearch", "Web search + AI answer"),
+        BotCommand("web", "Quick web search"),
         BotCommand("help", "All commands"),
     ])
 
@@ -188,6 +196,10 @@ def main() -> None:
         "newchat": cmd_newchat,
         "model": cmd_model,
         "models": cmd_models,
+        # Web search.
+        "websearch": cmd_websearch,
+        "web": cmd_web,
+        "searchmode": cmd_searchmode,
         # Knowledge.
         "search": cmd_search,
         "notes": cmd_notes,

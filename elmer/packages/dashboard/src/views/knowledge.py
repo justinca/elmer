@@ -74,13 +74,27 @@ def _render_data() -> None:
 
     st.divider()
 
-    # -- Semantic search ------------------------------------------------------
+    # -- Tabs: Semantic Search / Web Search -----------------------------------
 
-    st.subheader("Semantic Search")
+    tab_semantic, tab_web = st.tabs([
+        "\U0001f50d Semantic Search",
+        "\U0001f310 Web Search",
+    ])
+
+    with tab_semantic:
+        _render_semantic_search(api)
+
+    with tab_web:
+        _render_web_search(api)
+
+
+def _render_semantic_search(api: ElmerAPI) -> None:
+    """Semantic search across the knowledge base."""
     query = st.text_input(
         "Search query",
         placeholder="e.g. antenna setup, network config, radio frequencies",
         label_visibility="collapsed",
+        key="kb_semantic_query",
     )
 
     if query:
@@ -101,7 +115,6 @@ def _render_data() -> None:
                     content = r.get("content", "")
                     snippet = content[:200].replace("\n", " ")
                     rid = r.get("id", "")
-                    meta = r.get("metadata", {})
 
                     score_pct = f"{score:.0%}"
                     bar_len = round(score * 10)
@@ -117,6 +130,104 @@ def _render_data() -> None:
                             st.caption(snippet)
                             with st.expander("Full content"):
                                 st.text(content[:3000])
+
+
+def _render_web_search(api: ElmerAPI) -> None:
+    """Web search interface with option to save results to knowledge base."""
+    query = st.text_input(
+        "Web search query",
+        placeholder="e.g. IC-7300 operating manual, solar flux forecast",
+        label_visibility="collapsed",
+        key="kb_web_query",
+    )
+
+    if "web_results" not in st.session_state:
+        st.session_state.web_results = []
+
+    col_search, col_type = st.columns([3, 1])
+    with col_type:
+        search_type = st.selectbox(
+            "Type", ["text", "news"], label_visibility="collapsed",
+            key="kb_web_type",
+        )
+
+    if query:
+        with st.spinner("\U0001f310 Searching the web..."):
+            data = api.web_search(query, max_results=5, search_type=search_type)
+
+        if data is None:
+            st.error("Web search failed.")
+            return
+
+        results = data.get("results", [])
+        st.session_state.web_results = results
+
+        if not results:
+            st.info(f'No web results for "{query}".')
+            return
+
+        st.caption(f"{len(results)} results")
+
+        for i, r in enumerate(results):
+            title = r.get("title", "Untitled")
+            url = r.get("url", "")
+            snippet = r.get("snippet", "")
+
+            with st.container(border=True):
+                st.markdown(f"**{i + 1}. {title}**")
+                if url:
+                    st.markdown(f"[{url}]({url})")
+                if snippet:
+                    st.caption(snippet)
+
+                # Action buttons.
+                btn_cols = st.columns([1, 1, 3])
+                with btn_cols[0]:
+                    if st.button(
+                        "Fetch Page",
+                        key=f"fetch_{i}",
+                        type="secondary",
+                    ):
+                        with st.spinner("Fetching..."):
+                            page_text = api.web_fetch_page(url)
+                        if page_text:
+                            st.session_state[f"fetched_{i}"] = page_text
+                            st.rerun()
+                        else:
+                            st.warning("Could not fetch page content.")
+
+                with btn_cols[1]:
+                    fetched = st.session_state.get(f"fetched_{i}", "")
+                    if fetched and st.button(
+                        "Save to KB",
+                        key=f"save_{i}",
+                        type="primary",
+                    ):
+                        with st.spinner("Saving..."):
+                            result = api.knowledge_ingest_text(
+                                text=fetched,
+                                title=title,
+                                source="web",
+                            )
+                        if result:
+                            chunks = result.get("chunks_stored", 0)
+                            st.success(
+                                f"Saved \"{title}\" ({chunks} chunks)"
+                            )
+                        else:
+                            st.error("Failed to save to knowledge base.")
+
+                # Show fetched content if available.
+                fetched = st.session_state.get(f"fetched_{i}", "")
+                if fetched:
+                    with st.expander(
+                        f"Page content ({len(fetched):,} chars)", expanded=False,
+                    ):
+                        st.text(fetched[:5000])
+                        if len(fetched) > 5000:
+                            st.caption(
+                                f"... {len(fetched) - 5000:,} more characters"
+                            )
 
 
 def _render_source_management(api: ElmerAPI, sources: list[dict]) -> None:

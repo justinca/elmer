@@ -33,6 +33,17 @@ class WebSearchResponse(BaseModel):
     result_count: int
 
 
+class FetchPageRequest(BaseModel):
+    url: str
+    max_chars: int = Field(default=8000, ge=100, le=50000)
+
+
+class FetchPageResponse(BaseModel):
+    url: str
+    text: str
+    char_count: int
+
+
 # --- Endpoints ---
 
 
@@ -60,4 +71,20 @@ async def web_search(request: WebSearchRequest):
             for r in results
         ],
         result_count=len(results),
+    )
+
+
+@router.post("/fetch", response_model=FetchPageResponse)
+async def fetch_page(request: FetchPageRequest):
+    """Fetch a web page and extract readable text content."""
+    if not request.url.strip():
+        raise HTTPException(status_code=400, detail="Empty URL")
+
+    svc = get_service()
+    text = await svc.fetch_page(request.url, max_chars=request.max_chars)
+
+    return FetchPageResponse(
+        url=request.url,
+        text=text,
+        char_count=len(text),
     )

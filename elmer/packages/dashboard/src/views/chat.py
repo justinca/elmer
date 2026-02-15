@@ -18,8 +18,10 @@ def render() -> None:
         st.session_state.chat_conversation_id = None
     if "chat_model" not in st.session_state:
         st.session_state.chat_model = "llama3.1:8b"
+    if "chat_web_search" not in st.session_state:
+        st.session_state.chat_web_search = "Auto"
 
-    # -- Sidebar controls (model + history) -----------------------------------
+    # -- Sidebar controls (model + web search + history) ----------------------
 
     with st.sidebar:
         st.divider()
@@ -42,6 +44,20 @@ def render() -> None:
         )
         st.session_state.chat_model = selected_model
 
+        # Web search toggle.
+        search_options = ["Auto", "On", "Off"]
+        current_search = st.session_state.chat_web_search
+        if current_search not in search_options:
+            current_search = "Auto"
+
+        selected_search = st.radio(
+            "\U0001f310 Web Search",
+            search_options,
+            index=search_options.index(current_search),
+            horizontal=True,
+        )
+        st.session_state.chat_web_search = selected_search
+
         # New conversation button.
         if st.button("New Conversation", use_container_width=True):
             st.session_state.chat_messages = []
@@ -56,7 +72,6 @@ def render() -> None:
             for convo in conversations:
                 cid = convo.get("id")
                 msg_count = convo.get("message_count", 0)
-                updated = (convo.get("updated_at") or "")[:16]
                 is_current = cid == st.session_state.chat_conversation_id
 
                 label = f"{'> ' if is_current else ''}#{cid} ({msg_count} msgs)"
@@ -77,15 +92,36 @@ def render() -> None:
         role = msg.get("role", "user")
         content = msg.get("content", "")
         sources = msg.get("sources", [])
+        web_searched = msg.get("web_search_performed", False)
+        web_sources = msg.get("web_sources", [])
 
         with st.chat_message(role):
+            # Show web search indicator on messages that used it.
+            if web_searched and role == "assistant":
+                st.caption("\U0001f310 Used web search")
+
             st.markdown(content)
+
             if sources:
                 source_names = _extract_source_names(sources)
                 if source_names:
                     st.caption(
                         "Sources: " + ", ".join(source_names)
                     )
+
+            # Show web sources in collapsible section.
+            if web_sources:
+                with st.expander("\U0001f310 Web Sources"):
+                    for ws in web_sources:
+                        title = ws.get("title", "")
+                        url = ws.get("url", "")
+                        snippet = ws.get("snippet", "")
+                        st.markdown(f"**{title}**")
+                        if url:
+                            st.markdown(f"[{url}]({url})")
+                        if snippet:
+                            st.caption(snippet)
+                        st.divider()
 
     # -- Chat input -----------------------------------------------------------
 
@@ -100,13 +136,25 @@ def render() -> None:
         with st.chat_message("user"):
             st.markdown(prompt)
 
+        # Map search toggle to API parameter.
+        search_mode_map = {"Auto": "auto", "On": "force", "Off": "off"}
+        web_search = search_mode_map.get(
+            st.session_state.chat_web_search, "auto",
+        )
+
         # Send to API.
         with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
+            spinner_text = (
+                "\U0001f50d Searching the web..."
+                if web_search == "force"
+                else "Thinking..."
+            )
+            with st.spinner(spinner_text):
                 result = api.chat(
                     message=prompt,
                     conversation_id=st.session_state.chat_conversation_id,
                     model=st.session_state.chat_model,
+                    web_search=web_search,
                 )
 
             if result is None:
@@ -123,15 +171,21 @@ def render() -> None:
                 sources = result.get("sources_used", [])
                 new_cid = result.get("conversation_id")
                 error = result.get("error")
+                web_searched = result.get("web_search_performed", False)
+                web_sources = result.get("web_sources", [])
 
                 # Update conversation ID.
                 if new_cid is not None:
                     st.session_state.chat_conversation_id = new_cid
 
+                # Web search indicator.
+                if web_searched:
+                    st.caption("\U0001f310 Used web search")
+
                 # Display response.
                 st.markdown(response_text)
 
-                # Show sources.
+                # Show knowledge sources.
                 source_names = _extract_source_names(sources)
                 if source_names:
                     st.caption(
@@ -148,6 +202,20 @@ def render() -> None:
                             if snippet:
                                 st.caption(snippet)
 
+                # Show web sources.
+                if web_sources:
+                    with st.expander("\U0001f310 Web Sources"):
+                        for ws in web_sources:
+                            title = ws.get("title", "")
+                            url = ws.get("url", "")
+                            snippet = ws.get("snippet", "")
+                            st.markdown(f"**{title}**")
+                            if url:
+                                st.markdown(f"[{url}]({url})")
+                            if snippet:
+                                st.caption(snippet)
+                            st.divider()
+
                 if error:
                     st.warning(f"Note: {error}")
 
@@ -156,6 +224,8 @@ def render() -> None:
                     "role": "assistant",
                     "content": response_text,
                     "sources": sources,
+                    "web_search_performed": web_searched,
+                    "web_sources": web_sources,
                 })
 
 

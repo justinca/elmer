@@ -240,9 +240,12 @@ class ElmerAPI:
         self, message: str,
         conversation_id: int | None = None,
         model: str = "llama3.1:8b",
+        web_search: str = "auto",
     ) -> dict | None:
         """POST /chat -- send a RAG chat message."""
-        payload: dict[str, Any] = {"message": message, "model": model}
+        payload: dict[str, Any] = {
+            "message": message, "model": model, "web_search": web_search,
+        }
         if conversation_id is not None:
             payload["conversation_id"] = conversation_id
         return self._post("/chat", json=payload, timeout=_LONG_TIMEOUT)
@@ -261,6 +264,35 @@ class ElmerAPI:
     def delete_conversation(self, cid: int) -> dict | None:
         """DELETE /chat/conversation/{id}."""
         return self._delete(f"/chat/conversation/{cid}")
+
+    # -- Web Search -----------------------------------------------------------
+
+    def web_search(
+        self, query: str, max_results: int = 5, search_type: str = "text",
+    ) -> dict | None:
+        """POST /search/web -- DuckDuckGo web search."""
+        return self._post("/search/web", json={
+            "query": query,
+            "max_results": max_results,
+            "search_type": search_type,
+        }, timeout=30.0)
+
+    def web_fetch_page(self, url: str, max_chars: int = 8000) -> str:
+        """POST /search/fetch -- fetch and extract text from a web page."""
+        data = self._post("/search/fetch", json={
+            "url": url, "max_chars": max_chars,
+        }, timeout=15.0)
+        if data is None:
+            return ""
+        return data.get("text", "")
+
+    def knowledge_ingest_text(
+        self, text: str, title: str, source: str = "web",
+    ) -> dict | None:
+        """POST /knowledge/ingest/text -- ingest text into knowledge base."""
+        return self._post("/knowledge/ingest/text", json={
+            "text": text, "title": title, "source": source,
+        }, timeout=30.0)
 
     # -- Agents ---------------------------------------------------------------
 
