@@ -51,7 +51,7 @@ export function ChatInput({
           "flex-1 resize-none rounded-lg border bg-background px-3 py-2.5 text-sm",
           "placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring",
           "disabled:opacity-50",
-          "max-h-32",
+          "max-h-32 hide-scrollbar",
         )}
       />
       <Button

@@ -146,3 +146,12 @@
 .animate-page-in {
   animation: page-fade-in 150ms ease-out;
 }
+
+/* Hide scrollbar but keep scrolling */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
