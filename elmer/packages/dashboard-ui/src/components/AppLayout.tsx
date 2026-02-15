@@ -1,7 +1,8 @@
 import { Outlet } from "react-router-dom"
-import { useState } from "react"
+import { Suspense, useState } from "react"
 import { Sidebar } from "./Sidebar"
 import { MobileSidebar } from "./MobileSidebar"
+import { LoadingSpinner } from "./LoadingSpinner"
 import { cn } from "@/lib/utils"
 
 export function AppLayout() {
@@ -37,7 +38,9 @@ export function AppLayout() {
             "flex-1 overflow-y-auto p-4 md:p-6",
           )}
         >
-          <Outlet />
+          <Suspense fallback={<LoadingSpinner label="Loading..." />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
     </div>
