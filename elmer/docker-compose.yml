@@ -85,6 +85,27 @@ services:
         condition: service_healthy
 
   # --------------------------------------------------------
+  # Dashboard UI — React web dashboard
+  # Binds to port 3000 on the host
+  # --------------------------------------------------------
+  elmer-dashboard-ui:
+    build:
+      context: ./packages/dashboard-ui
+      dockerfile: Dockerfile
+    container_name: elmer-dashboard-ui
+    network_mode: host
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      elmer-core:
+        condition: service_healthy
+
+  # --------------------------------------------------------
   # Telegram Bot — chat interface to Elmer
   # No port binding (outbound only to Telegram API)
   # --------------------------------------------------------
@@ -110,8 +131,8 @@ services:
   # --------------------------------------------------------
   elmer-knowledge:
     build:
-      context: ./packages/knowledge
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: packages/knowledge/Dockerfile
     container_name: elmer-knowledge
     network_mode: host
     env_file: .env
@@ -131,8 +152,8 @@ services:
   # --------------------------------------------------------
   elmer-transcription:
     build:
-      context: ./packages/transcription
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: packages/transcription/Dockerfile
     container_name: elmer-transcription
     network_mode: host
     env_file: .env
