@@ -193,7 +193,7 @@ export default function SystemStatus() {
               ip={node.host ? `${node.host}${node.port ? `:${node.port}` : ""}` : undefined}
               uptime={node.last_seen ? `Seen ${formatDistanceToNow(new Date(node.last_seen), { addSuffix: true })}` : undefined}
               services={
-                node.metadata?.services
+                Array.isArray(node.metadata?.services)
                   ? (node.metadata.services as Array<{ name: string; status: string }>).map((s) => ({
                       name: s.name,
                       status: mapStatus(s.status),
