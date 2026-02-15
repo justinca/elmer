@@ -1,12 +1,11 @@
 import { Outlet, useLocation } from "react-router-dom"
-import { Suspense, useState, useEffect } from "react"
+import { Suspense, useState, useEffect, useRef } from "react"
 import { Sidebar } from "./Sidebar"
 import { MobileSidebar } from "./MobileSidebar"
 import { LoadingSpinner } from "./LoadingSpinner"
 import { Breadcrumbs } from "./Breadcrumbs"
 import { NotificationBell } from "./NotificationBell"
 import { CommandPalette } from "./CommandPalette"
-import { cn } from "@/lib/utils"
 
 export function AppLayout() {
   const location = useLocation()
@@ -14,6 +13,7 @@ export function AppLayout() {
     return localStorage.getItem("elmer-sidebar-collapsed") === "true"
   })
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   const handleToggle = () => {
     setCollapsed((prev) => {
@@ -33,6 +33,13 @@ export function AppLayout() {
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
   }, [])
+
+  // Reset scroll position on route change
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0
+    }
+  }, [location.pathname])
 
   const isFullBleed = location.pathname === "/chat"
 
@@ -55,21 +62,22 @@ export function AppLayout() {
         </div>
 
         {/* Page content */}
-        <div
-          className={cn(
-            "flex-1 min-h-0",
-            isFullBleed
-              ? "flex flex-col"
-              : "overflow-y-auto p-4 md:p-6",
-          )}
-        >
-          <Suspense fallback={<LoadingSpinner label="Loading..." />}>
-            <div key={location.pathname} className={cn("animate-in fade-in duration-150", isFullBleed && "flex flex-1 min-h-0 flex-col")}>
-              {!isFullBleed && <Breadcrumbs />}
+        {isFullBleed ? (
+          <div className="flex flex-1 min-h-0 flex-col">
+            <Suspense fallback={<LoadingSpinner label="Loading..." />}>
               <Outlet />
-            </div>
-          </Suspense>
-        </div>
+            </Suspense>
+          </div>
+        ) : (
+          <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
+            <Suspense fallback={<LoadingSpinner label="Loading..." />}>
+              <div key={location.pathname} className="animate-in fade-in duration-150">
+                <Breadcrumbs />
+                <Outlet />
+              </div>
+            </Suspense>
+          </div>
+        )}
       </main>
 
       {/* Command palette */}
