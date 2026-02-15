@@ -123,7 +123,7 @@ FT8 calling frequency for 15 minutes (configurable).
 1. `band-scanner` agent starts the scanner at 6am MST (13:00 UTC) daily
 2. Scanner selects daytime or nighttime bands based on UTC hour
 3. Bands are prioritized by propagation conditions and DX spot activity
-4. Radio is tuned via OmniRig (omnipyrig) through the Worker service
+4. Radio is tuned via Kenwood TS-2000 CAT commands over TCP to SDR Console
 5. `band-scanner-stop` agent stops it at 9pm MST (04:00 UTC)
 
 **Band lists:**
@@ -148,7 +148,8 @@ an MQTT notification to `elmer/radio/scanner-paused`.
 
 **Configuration (Worker .env):**
 ```
-OMNIRIG_RIG_NUMBER=1          # Which OmniRig rig to control
+CAT_HOST=localhost            # SDR Console CAT TCP host
+CAT_PORT=7356                 # SDR Console CAT TCP port
 SCANNER_DWELL_SECONDS=900     # Default dwell time (15 min)
 SCANNER_DAYTIME_START_UTC=13  # 6am MST
 SCANNER_DAYTIME_END_UTC=4     # 9pm MST

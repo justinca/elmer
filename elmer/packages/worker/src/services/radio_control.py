@@ -1,76 +1,121 @@
-"""OmniRig radio control service for SDR Console.
+"""Kenwood TS-2000 CAT control for SDR Console.
 
-Wraps the omnipyrig library to control SDR Console via OmniRig's COM
-interface on Windows.  OmniRig must be running before this service is used.
+Sends CAT commands over TCP to SDR Console, which emulates a Kenwood
+TS-2000.  No COM/OmniRig dependency — just a plain TCP socket.
 
-Note: omnipyrig uses Windows COM automation (win32com) so this module
-only works on Windows — which is fine since the Worker runs on Windows.
+TS-2000 CAT command reference (subset used here):
+  FA00014074000;   Set VFO-A frequency (11-digit Hz)
+  FA;              Read VFO-A frequency -> FA00014074000;
+  MD2;             Set mode (1=LSB 2=USB 3=CW 4=FM 5=AM 7=CW-R)
+  MD;              Read mode -> MD2;
+  ID;              Read rig ID -> ID019; (TS-2000)
 """
 
 import logging
+import socket
+import threading
 from typing import Any
 
 logger = logging.getLogger("elmer.radio_control")
 
-# Mode mappings: our label -> omnipyrig constant name
-_MODE_MAP = {
-    "USB": "MODE_SSB_U",
-    "LSB": "MODE_SSB_L",
-    "CW": "MODE_CW_U",
-    "CW-R": "MODE_CW_L",
-    "AM": "MODE_AM",
-    "FM": "MODE_FM",
+# TS-2000 mode numbers.
+_MODE_TO_CAT: dict[str, str] = {
+    "LSB": "1",
+    "USB": "2",
+    "CW": "3",
+    "FM": "4",
+    "AM": "5",
+    "CW-R": "7",
 }
 
-# Reverse map built lazily after omnipyrig is imported.
-_REVERSE_MODE_MAP: dict[int, str] | None = None
+_CAT_TO_MODE: dict[str, str] = {v: k for k, v in _MODE_TO_CAT.items()}
+
+# Socket timeout for CAT commands.
+_SOCK_TIMEOUT = 3.0
 
 
 class RadioControl:
-    """Interface to OmniRig for controlling SDR Console."""
+    """CAT control interface to SDR Console (TS-2000 emulation) over TCP."""
 
-    def __init__(self, rig_number: int = 1) -> None:
-        self._rig_number = rig_number
-        self._omni: Any = None
+    def __init__(self, host: str = "localhost", port: int = 7356) -> None:
+        self._host = host
+        self._port = port
         self._connected = False
-        self._rig_type: str = "unknown"
+        self._rig_id: str = ""
+        self._lock = threading.Lock()
+
+    # ------------------------------------------------------------------
+    # Low-level CAT I/O
+    # ------------------------------------------------------------------
+
+    def _send_cmd(self, cmd: str) -> str:
+        """Send a CAT command and return the response.
+
+        Opens a fresh TCP connection for each command to avoid stale
+        socket issues with SDR Console's CAT server.
+        """
+        with self._lock:
+            try:
+                with socket.create_connection(
+                    (self._host, self._port), timeout=_SOCK_TIMEOUT
+                ) as sock:
+                    sock.sendall(cmd.encode("ascii"))
+
+                    # Read until we get a semicolon terminator.
+                    buf = b""
+                    while b";" not in buf:
+                        chunk = sock.recv(256)
+                        if not chunk:
+                            break
+                        buf += chunk
+
+                    resp = buf.decode("ascii").strip()
+                    logger.debug("CAT %s -> %s", cmd.rstrip(";"), resp)
+                    return resp
+
+            except (OSError, socket.timeout) as exc:
+                logger.error("CAT command '%s' failed: %s", cmd.rstrip(";"), exc)
+                self._connected = False
+                raise
+
+    def _send_cmd_no_reply(self, cmd: str) -> None:
+        """Send a CAT set-command that has no response."""
+        with self._lock:
+            try:
+                with socket.create_connection(
+                    (self._host, self._port), timeout=_SOCK_TIMEOUT
+                ) as sock:
+                    sock.sendall(cmd.encode("ascii"))
+            except (OSError, socket.timeout) as exc:
+                logger.error("CAT command '%s' failed: %s", cmd.rstrip(";"), exc)
+                self._connected = False
+                raise
 
     # ------------------------------------------------------------------
     # Connection
     # ------------------------------------------------------------------
 
     def connect(self) -> dict[str, Any]:
-        """Initialize OmniRig connection and verify it responds.
-
-        Returns a status dict with rig info or error details.
-        """
+        """Verify the CAT connection by reading the rig ID."""
         try:
-            import omnipyrig
-
-            self._omni = omnipyrig.OmniRigWrapper()
-            self._omni.setActiveRig(self._rig_number)
-
-            rig_type = self._omni.getParam("RigType")
-            self._rig_type = str(rig_type) if rig_type else "unknown"
+            resp = self._send_cmd("ID;")
+            # TS-2000 returns "ID019;"
+            self._rig_id = resp.replace(";", "")
             self._connected = True
-
-            logger.info(
-                "OmniRig connected: rig %d, type=%s",
-                self._rig_number,
-                self._rig_type,
-            )
+            logger.info("CAT connected to %s:%d (ID=%s)", self._host, self._port, self._rig_id)
             return {
                 "connected": True,
-                "rig_number": self._rig_number,
-                "rig_type": self._rig_type,
+                "host": self._host,
+                "port": self._port,
+                "rig_id": self._rig_id,
             }
-
         except Exception as exc:
             self._connected = False
-            logger.error("OmniRig connection failed: %s", exc)
+            logger.error("CAT connection failed to %s:%d: %s", self._host, self._port, exc)
             return {
                 "connected": False,
-                "rig_number": self._rig_number,
+                "host": self._host,
+                "port": self._port,
                 "error": str(exc),
             }
 
@@ -80,27 +125,22 @@ class RadioControl:
 
     def set_frequency(self, freq_hz: int) -> dict[str, Any]:
         """Set VFO-A frequency in Hz."""
-        if not self._connected or self._omni is None:
-            return {"ok": False, "error": "OmniRig not connected"}
         try:
-            self._omni.setFrequency("A", freq_hz)
+            cmd = f"FA{freq_hz:011d};"
+            self._send_cmd_no_reply(cmd)
             logger.info("Frequency set to %d Hz", freq_hz)
             return {"ok": True, "frequency_hz": freq_hz}
         except Exception as exc:
-            logger.error("Failed to set frequency: %s", exc)
             return {"ok": False, "error": str(exc)}
 
     def get_frequency(self) -> int | None:
         """Read current VFO-A frequency in Hz."""
-        if not self._connected or self._omni is None:
-            return None
         try:
-            freq = self._omni.getParam("FreqA")
-            if freq is None:
-                freq = self._omni.getParam("Freq")
-            return int(freq) if freq else None
-        except Exception as exc:
-            logger.error("Failed to read frequency: %s", exc)
+            resp = self._send_cmd("FA;")
+            # Response: "FA00014074000;"
+            digits = resp.replace("FA", "").replace(";", "")
+            return int(digits) if digits.isdigit() else None
+        except Exception:
             return None
 
     # ------------------------------------------------------------------
@@ -108,54 +148,26 @@ class RadioControl:
     # ------------------------------------------------------------------
 
     def set_mode(self, mode: str) -> dict[str, Any]:
-        """Set operating mode (USB, LSB, CW, AM, FM)."""
-        if not self._connected or self._omni is None:
-            return {"ok": False, "error": "OmniRig not connected"}
-
+        """Set operating mode (USB, LSB, CW, AM, FM, CW-R)."""
         mode_upper = mode.upper()
-        attr_name = _MODE_MAP.get(mode_upper)
-        if attr_name is None:
+        cat_num = _MODE_TO_CAT.get(mode_upper)
+        if cat_num is None:
             return {"ok": False, "error": f"Unknown mode: {mode}"}
-
         try:
-            import omnipyrig
-
-            mode_value = getattr(omnipyrig, attr_name, None)
-            if mode_value is None:
-                mode_value = getattr(self._omni, attr_name, None)
-            if mode_value is None:
-                return {"ok": False, "error": f"Mode constant {attr_name} not found in omnipyrig"}
-
-            self._omni.setMode(mode_value)
+            self._send_cmd_no_reply(f"MD{cat_num};")
             logger.info("Mode set to %s", mode_upper)
             return {"ok": True, "mode": mode_upper}
         except Exception as exc:
-            logger.error("Failed to set mode: %s", exc)
             return {"ok": False, "error": str(exc)}
 
     def get_mode(self) -> str | None:
         """Read current operating mode as a string."""
-        if not self._connected or self._omni is None:
-            return None
         try:
-            import omnipyrig
-
-            global _REVERSE_MODE_MAP
-            if _REVERSE_MODE_MAP is None:
-                _REVERSE_MODE_MAP = {}
-                for label, attr in _MODE_MAP.items():
-                    val = getattr(omnipyrig, attr, None)
-                    if val is None:
-                        val = getattr(self._omni, attr, None)
-                    if val is not None:
-                        _REVERSE_MODE_MAP[int(val)] = label
-
-            raw = self._omni.getParam("Mode")
-            if raw is None:
-                return None
-            return _REVERSE_MODE_MAP.get(int(raw), f"UNKNOWN({raw})")
-        except Exception as exc:
-            logger.error("Failed to read mode: %s", exc)
+            resp = self._send_cmd("MD;")
+            # Response: "MD2;"
+            num = resp.replace("MD", "").replace(";", "").strip()
+            return _CAT_TO_MODE.get(num, f"UNKNOWN({num})")
+        except Exception:
             return None
 
     # ------------------------------------------------------------------
@@ -164,12 +176,22 @@ class RadioControl:
 
     def get_status(self) -> dict[str, Any]:
         """Return current radio status dict."""
+        if not self._connected:
+            return {
+                "connected": False,
+                "host": self._host,
+                "port": self._port,
+                "rig_id": self._rig_id,
+                "frequency_hz": None,
+                "mode": None,
+            }
         freq = self.get_frequency()
         mode = self.get_mode()
         return {
             "connected": self._connected,
-            "rig_number": self._rig_number,
-            "rig_type": self._rig_type,
+            "host": self._host,
+            "port": self._port,
+            "rig_id": self._rig_id,
             "frequency_hz": freq,
             "mode": mode,
         }
@@ -186,9 +208,9 @@ class RadioControl:
 _instance: RadioControl | None = None
 
 
-def get_radio_control(rig_number: int = 1) -> RadioControl:
+def get_radio_control(host: str = "localhost", port: int = 7356) -> RadioControl:
     """Return the shared RadioControl instance."""
     global _instance
     if _instance is None:
-        _instance = RadioControl(rig_number)
+        _instance = RadioControl(host, port)
     return _instance
