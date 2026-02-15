@@ -57,14 +57,14 @@ export function AppLayout() {
         {/* Page content */}
         <div
           className={cn(
-            "flex-1",
+            "flex-1 min-h-0",
             isFullBleed
-              ? "flex flex-col overflow-hidden"
+              ? "flex flex-col"
               : "overflow-y-auto p-4 md:p-6",
           )}
         >
           <Suspense fallback={<LoadingSpinner label="Loading..." />}>
-            <div key={location.pathname} className={cn("animate-in fade-in duration-150", isFullBleed && "flex flex-1 flex-col overflow-hidden")}>
+            <div key={location.pathname} className={cn("animate-in fade-in duration-150", isFullBleed && "flex flex-1 min-h-0 flex-col")}>
               {!isFullBleed && <Breadcrumbs />}
               <Outlet />
             </div>
