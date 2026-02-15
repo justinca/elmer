@@ -59,6 +59,9 @@ class ChatResponse:
     model: str
     sources_used: list[SourceCitation] = field(default_factory=list)
     error: str | None = None
+    web_search_performed: bool = False
+    web_search_query: str = ""
+    web_sources: list[dict[str, str]] = field(default_factory=list)
 
 
 async def chat(
@@ -66,18 +69,20 @@ async def chat(
     conversation_id: int | None = None,
     model: str = "llama3.1:8b",
     channel: str = "api",
+    web_search: str = "auto",
 ) -> ChatResponse:
     """Process a chat message with RAG context augmentation.
 
     Steps:
       1. Create or load conversation
       2. Embed user message and search knowledge base
+      2b. Decide whether to web search, execute if needed
       3. Build augmented prompt (system + context + history + message)
       4. Send to Ollama via worker (with fallback)
       5. Store messages and return response with citations
     """
     async with _chat_semaphore:
-        return await _chat_inner(message, conversation_id, model, channel)
+        return await _chat_inner(message, conversation_id, model, channel, web_search)
 
 
 async def _chat_inner(
@@ -85,6 +90,7 @@ async def _chat_inner(
     conversation_id: int | None,
     model: str,
     channel: str,
+    web_search: str,
 ) -> ChatResponse:
     # 1. Create or load conversation.
     if conversation_id is None:
@@ -102,9 +108,53 @@ async def _chat_inner(
     except Exception:
         logger.warning("Knowledge search failed, continuing without context")
 
+    # 2b. Web search decision and execution.
+    top_local_score = max((s.score for s in sources_used), default=0.0)
+    web_context_block = ""
+    web_source_list: list[dict[str, str]] = []
+    search_performed = False
+    search_query = ""
+
+    effective_mode = web_search
+    if web_search == "auto" and _has_search_marker(message):
+        effective_mode = "force"
+
+    if effective_mode != "off":
+        try:
+            from .search_decision import get_engine
+            from .web_search import get_service as get_search_service
+
+            decision = await get_engine().decide(
+                message, mode=effective_mode, top_local_score=top_local_score,
+            )
+
+            if decision.should_search:
+                search_query = decision.search_query
+                web_results = await get_search_service().search(
+                    decision.search_query, max_results=5,
+                )
+                if web_results:
+                    search_performed = True
+                    web_context_block, web_source_list = _format_web_results(web_results)
+                    logger.info(
+                        "Web search for '%s': %d results (%s)",
+                        decision.search_query, len(web_results), decision.reason,
+                    )
+        except Exception:
+            logger.warning("Web search failed, continuing without web results")
+
     # 3. Build the messages list for Ollama.
+    combined_context = context_block
+    if web_context_block:
+        if combined_context:
+            combined_context += "\n\n" + web_context_block
+        else:
+            combined_context = web_context_block
+
     history = await convo.get_history(conversation_id, limit=MAX_HISTORY_MESSAGES)
-    ollama_messages = _build_messages(history, message, context_block)
+    ollama_messages = _build_messages(
+        history, message, combined_context, has_web_results=search_performed,
+    )
 
     # 4. Store the user message.
     context_refs = [
@@ -137,6 +187,9 @@ async def _chat_inner(
         conversation_id=conversation_id,
         model=model,
         sources_used=sources_used,
+        web_search_performed=search_performed,
+        web_search_query=search_query,
+        web_sources=web_source_list,
     )
 
 
@@ -239,12 +292,25 @@ def _build_messages(
     history: list[dict[str, Any]],
     user_message: str,
     context_block: str,
+    has_web_results: bool = False,
 ) -> list[dict[str, str]]:
     """Build the full messages list for Ollama."""
     messages: list[dict[str, str]] = []
 
     # System prompt — always first.
     system_content = SYSTEM_PROMPT
+    if has_web_results:
+        system_content += (
+            "\n\nYou have been provided with recent web search results below. "
+            "Use this information to answer questions about current events, "
+            "recent developments, or topics requiring up-to-date information. "
+            "When using web search information, mention the source naturally "
+            '(e.g., "According to..." or "Based on recent reports..."). '
+            "If the web results don't contain relevant information, say so "
+            "and answer from your general knowledge instead. "
+            "Do NOT make up URLs or citations — only reference sources "
+            "actually provided in the search results."
+        )
     if context_block:
         system_content += "\n\n" + context_block
     else:
@@ -274,6 +340,48 @@ def _build_messages(
     messages.append({"role": "user", "content": user_message})
 
     return messages
+
+
+# --- Web search helpers ---
+
+MAX_WEB_CONTEXT_CHARS = 8000
+
+
+def _has_search_marker(message: str) -> bool:
+    """Check if the message contains explicit search markers."""
+    msg = message.strip().lower()
+    return msg.startswith("/websearch") or "[search]" in msg
+
+
+def _format_web_results(
+    results: list,
+) -> tuple[str, list[dict[str, str]]]:
+    """Format web search results into a context block and source list."""
+    from .web_search import WebSearchResult
+
+    parts: list[str] = []
+    sources: list[dict[str, str]] = []
+    total_chars = 0
+
+    for r in results:
+        sources.append({"title": r.title, "url": r.url, "snippet": r.snippet})
+
+        text = r.body if r.body else r.snippet
+        chunk = f"[Web: {r.title}]\nURL: {r.url}\n{text}"
+        if total_chars + len(chunk) > MAX_WEB_CONTEXT_CHARS:
+            remaining = MAX_WEB_CONTEXT_CHARS - total_chars
+            if remaining > 100:
+                chunk = chunk[:remaining] + "\n[...truncated]"
+                parts.append(chunk)
+            break
+        parts.append(chunk)
+        total_chars += len(chunk)
+
+    context_block = (
+        "Recent information from web search:\n\n"
+        + "\n\n".join(parts)
+    )
+    return context_block, sources
 
 
 # --- Ollama call ---

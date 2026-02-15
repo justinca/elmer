@@ -7,6 +7,7 @@ from .query_database import QueryDatabaseTool
 from .run_script import RunScriptTool
 from .search_knowledge import SearchKnowledgeTool
 from .send_telegram import SendTelegramTool
+from .web_search import WebSearchTool
 
 __all__ = [
     "BaseTool",
@@ -17,4 +18,5 @@ __all__ = [
     "RunScriptTool",
     "SearchKnowledgeTool",
     "SendTelegramTool",
+    "WebSearchTool",
 ]

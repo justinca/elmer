@@ -23,6 +23,7 @@ class ToolRegistry:
         from .tools.run_script import RunScriptTool
         from .tools.search_knowledge import SearchKnowledgeTool
         from .tools.send_telegram import SendTelegramTool
+        from .tools.web_search import WebSearchTool
 
         for cls in [
             SearchKnowledgeTool,
@@ -31,6 +32,7 @@ class ToolRegistry:
             PublishMQTTTool,
             CallAPITool,
             RunScriptTool,
+            WebSearchTool,
         ]:
             self.register(cls)
 

@@ -20,6 +20,7 @@ class ChatRequest(BaseModel):
     message: str
     conversation_id: int | None = None
     model: str = "llama3.1:8b"
+    web_search: str = "auto"  # "auto" | "force" | "off"
 
 
 class SourceUsed(BaseModel):
@@ -29,12 +30,21 @@ class SourceUsed(BaseModel):
     snippet: str = ""
 
 
+class WebSource(BaseModel):
+    title: str
+    url: str
+    snippet: str
+
+
 class ChatResponseModel(BaseModel):
     response: str
     conversation_id: int
     model: str
     sources_used: list[SourceUsed] = Field(default_factory=list)
     error: str | None = None
+    web_search_performed: bool = False
+    web_search_query: str = ""
+    web_sources: list[WebSource] = Field(default_factory=list)
 
 
 class ConversationSummary(BaseModel):
@@ -74,10 +84,14 @@ async def send_message(request: ChatRequest):
     if not request.message.strip():
         raise HTTPException(status_code=400, detail="Message is empty")
 
+    if request.web_search not in ("auto", "force", "off"):
+        raise HTTPException(status_code=400, detail="web_search must be 'auto', 'force', or 'off'")
+
     result = await rag_chat.chat(
         message=request.message,
         conversation_id=request.conversation_id,
         model=request.model,
+        web_search=request.web_search,
     )
 
     return ChatResponseModel(
@@ -94,6 +108,9 @@ async def send_message(request: ChatRequest):
             for s in result.sources_used
         ],
         error=result.error,
+        web_search_performed=result.web_search_performed,
+        web_search_query=result.web_search_query,
+        web_sources=[WebSource(**ws) for ws in result.web_sources],
     )
 
 
