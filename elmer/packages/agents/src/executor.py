@@ -172,6 +172,7 @@ class AgentExecutor:
             # Call Ollama.
             llm_response = await self._call_ollama(
                 agent.model, messages, ollama_tools if active_tools else None,
+                temperature=agent.temperature,
             )
 
             msg = llm_response.get("message", {})
@@ -251,6 +252,7 @@ class AgentExecutor:
         model: str,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
+        temperature: float | None = None,
     ) -> dict[str, Any]:
         """Send chat request to Ollama via worker, falling back to direct."""
         payload: dict[str, Any] = {
@@ -260,6 +262,8 @@ class AgentExecutor:
         }
         if tools:
             payload["tools"] = tools
+        if temperature is not None:
+            payload["options"] = {"temperature": temperature}
 
         worker_url = (
             f"http://{self._settings.ELMER_WORKER_HOST}:"

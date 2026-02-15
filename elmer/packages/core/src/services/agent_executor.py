@@ -85,6 +85,7 @@ def _row_to_agent_definition(row: dict[str, Any]) -> AgentDefinition:
         description=row.get("description") or "",
         system_prompt=row.get("system_prompt") or "",
         model=row.get("model") or "llama3.1:8b",
+        temperature=row.get("temperature"),
         tools=tools,
         triggers=triggers,
         output_channels=raw_channels if isinstance(raw_channels, list) else [],

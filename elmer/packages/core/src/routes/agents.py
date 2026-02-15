@@ -45,6 +45,7 @@ class AgentDefinitionResponse(BaseModel):
     description: str = ""
     system_prompt: str = ""
     model: str = "llama3.1:8b"
+    temperature: float | None = None
     tools: list[AgentTool] = Field(default_factory=list)
     triggers: list[AgentTrigger] = Field(default_factory=list)
     output_channels: list[str] = Field(default_factory=list)
@@ -62,6 +63,7 @@ class AgentCreateRequest(BaseModel):
     description: str = ""
     system_prompt: str = ""
     model: str = "llama3.1:8b"
+    temperature: float | None = Field(None, ge=0.0, le=2.0)
     tools: list[AgentTool] = Field(default_factory=list)
     triggers: list[AgentTrigger] = Field(default_factory=list)
     output_channels: list[str] = Field(default_factory=list)
@@ -76,6 +78,7 @@ class AgentUpdateRequest(BaseModel):
     description: str | None = None
     system_prompt: str | None = None
     model: str | None = None
+    temperature: float | None = Field(None, ge=0.0, le=2.0)
     tools: list[AgentTool] | None = None
     triggers: list[AgentTrigger] | None = None
     output_channels: list[str] | None = None
@@ -143,6 +146,7 @@ def _row_to_response(row) -> AgentDefinitionResponse:
         description=row.get("description") or "",
         system_prompt=row.get("system_prompt") or "",
         model=row.get("model") or "llama3.1:8b",
+        temperature=row.get("temperature"),
         tools=tools,
         triggers=triggers,
         output_channels=raw_channels if isinstance(raw_channels, list) else [],
@@ -227,17 +231,18 @@ async def sync_agent_definitions(definitions_dir: str | Path) -> dict[str, int]:
                     """
                     INSERT INTO elmer.agent_definitions
                         (name, display_name, description, system_prompt, model,
-                         tools, triggers, output_channels, config,
+                         temperature, tools, triggers, output_channels, config,
                          enabled, max_concurrent, timeout_seconds)
                     VALUES ($1, $2, $3, $4, $5,
-                            $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb,
-                            $10, $11, $12)
+                            $6, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb,
+                            $11, $12, $13)
                     """,
                     name,
                     data.get("display_name", ""),
                     data.get("description", ""),
                     data.get("system_prompt", ""),
                     data.get("model", "llama3.1:8b"),
+                    data.get("temperature"),
                     json.dumps(tools),
                     json.dumps(raw_triggers),
                     json.dumps(data.get("output_channels", [])),
@@ -260,16 +265,18 @@ async def sync_agent_definitions(definitions_dir: str | Path) -> dict[str, int]:
                         """
                         UPDATE elmer.agent_definitions SET
                             display_name = $1, description = $2, system_prompt = $3,
-                            model = $4, tools = $5::jsonb, triggers = $6::jsonb,
-                            output_channels = $7::jsonb, config = $8::jsonb,
-                            max_concurrent = $9, timeout_seconds = $10,
+                            model = $4, temperature = $5,
+                            tools = $6::jsonb, triggers = $7::jsonb,
+                            output_channels = $8::jsonb, config = $9::jsonb,
+                            max_concurrent = $10, timeout_seconds = $11,
                             updated_at = now()
-                        WHERE name = $11
+                        WHERE name = $12
                         """,
                         data.get("display_name", ""),
                         data.get("description", ""),
                         data.get("system_prompt", ""),
                         data.get("model", "llama3.1:8b"),
+                        data.get("temperature"),
                         json.dumps(tools),
                         json.dumps(raw_triggers),
                         json.dumps(data.get("output_channels", [])),
@@ -442,11 +449,11 @@ async def create_agent(request: AgentCreateRequest):
         """
         INSERT INTO elmer.agent_definitions
             (name, display_name, description, system_prompt, model,
-             tools, triggers, output_channels, config,
+             temperature, tools, triggers, output_channels, config,
              enabled, max_concurrent, timeout_seconds)
         VALUES ($1, $2, $3, $4, $5,
-                $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb,
-                $10, $11, $12)
+                $6, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb,
+                $11, $12, $13)
         RETURNING *
         """,
         request.name,
@@ -454,6 +461,7 @@ async def create_agent(request: AgentCreateRequest):
         request.description,
         request.system_prompt,
         request.model,
+        request.temperature,
         tools_json,
         triggers_json,
         json.dumps(request.output_channels),
@@ -484,6 +492,7 @@ async def update_agent(name: str, request: AgentUpdateRequest):
         "description": request.description,
         "system_prompt": request.system_prompt,
         "model": request.model,
+        "temperature": request.temperature,
         "enabled": request.enabled,
         "max_concurrent": request.max_concurrent,
         "timeout_seconds": request.timeout_seconds,

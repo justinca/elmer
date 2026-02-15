@@ -106,10 +106,14 @@ async def cmd_agent(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     max_conc = agent.get("max_concurrent", "?")
     channels = ", ".join(agent.get("output_channels", [])) or "none"
 
+    temp = agent.get("temperature")
+    temp_str = f"{temp}" if temp is not None else "default"
+
     lines = [
         f"{icon} *{display}* (`{name}`)\n",
         f"\U0001f4dd {desc}\n",
         f"\U0001f9e0 Model: `{model}`",
+        f"\U0001f321\ufe0f Temperature: {temp_str}",
         f"\u23f1 Timeout: {timeout}s | Max concurrent: {max_conc}",
         f"\U0001f4e4 Output: {channels}",
     ]

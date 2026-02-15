@@ -94,6 +94,21 @@ def _render_data() -> None:
                 with detail_tabs[0]:
                     st.markdown(f"**Name:** `{name}`")
                     st.markdown(f"**Model:** `{model}`")
+                    current_temp = agent.get("temperature")
+                    temp_display = f"{current_temp}" if current_temp is not None else "default"
+                    st.markdown(f"**Temperature:** {temp_display}")
+                    new_temp = st.slider(
+                        "Temperature",
+                        min_value=0.0, max_value=2.0, step=0.1,
+                        value=current_temp if current_temp is not None else 0.7,
+                        key=f"temp_{name}",
+                    )
+                    if (current_temp is None and new_temp != 0.7) or (
+                        current_temp is not None and new_temp != current_temp
+                    ):
+                        if st.button("Save Temperature", key=f"save_temp_{name}", type="primary"):
+                            api.update_agent(name, {"temperature": new_temp})
+                            st.rerun()
                     st.markdown(f"**Max Concurrent:** {agent.get('max_concurrent', 1)}")
                     st.markdown(f"**Timeout:** {agent.get('timeout_seconds', 120)}s")
                     if channels:

@@ -37,11 +37,11 @@ class AgentRegistry:
             """
             INSERT INTO elmer.agent_definitions
                 (name, display_name, description, system_prompt, model,
-                 tools, triggers, output_channels, config,
+                 temperature, tools, triggers, output_channels, config,
                  enabled, max_concurrent, timeout_seconds)
             VALUES ($1, $2, $3, $4, $5,
-                    $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb,
-                    $10, $11, $12)
+                    $6, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb,
+                    $11, $12, $13)
             RETURNING id
             """,
             definition.name,
@@ -49,6 +49,7 @@ class AgentRegistry:
             definition.description,
             definition.system_prompt,
             definition.model,
+            definition.temperature,
             json.dumps([t.model_dump() for t in definition.tools]),
             json.dumps([t.model_dump() for t in definition.triggers]),
             json.dumps(definition.output_channels),
@@ -117,6 +118,7 @@ class AgentRegistry:
             "description": "description",
             "system_prompt": "system_prompt",
             "model": "model",
+            "temperature": "temperature",
             "enabled": "enabled",
             "max_concurrent": "max_concurrent",
             "timeout_seconds": "timeout_seconds",
@@ -309,6 +311,7 @@ class AgentRegistry:
             description=data.get("description", ""),
             system_prompt=data.get("system_prompt", ""),
             model=data.get("model", "llama3.1:8b"),
+            temperature=data.get("temperature"),
             tools=tools,
             triggers=triggers,
             output_channels=data.get("output_channels", []),
@@ -360,6 +363,7 @@ class AgentRegistry:
                         or existing.description != defn.description
                         or existing.system_prompt != defn.system_prompt
                         or existing.model != defn.model
+                        or existing.temperature != defn.temperature
                         or existing.timeout_seconds != defn.timeout_seconds
                         or existing.output_channels != defn.output_channels
                         or existing_tool_names != defn_tool_names
@@ -373,6 +377,7 @@ class AgentRegistry:
                                 "description": defn.description,
                                 "system_prompt": defn.system_prompt,
                                 "model": defn.model,
+                                "temperature": defn.temperature,
                                 "tools": defn.tools,
                                 "triggers": defn.triggers,
                                 "output_channels": defn.output_channels,
@@ -427,6 +432,7 @@ class AgentRegistry:
             description=row.get("description") or "",
             system_prompt=row.get("system_prompt") or "",
             model=row.get("model") or "llama3.1:8b",
+            temperature=row.get("temperature"),
             tools=tools,
             triggers=triggers,
             output_channels=raw_channels if isinstance(raw_channels, list) else [],

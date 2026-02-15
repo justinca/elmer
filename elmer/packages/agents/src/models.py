@@ -87,6 +87,10 @@ class AgentDefinition(BaseModel):
     model: str = Field(
         "llama3.1:8b", description="Ollama model to use for inference"
     )
+    temperature: float | None = Field(
+        None, ge=0.0, le=2.0,
+        description="LLM sampling temperature (0.0=deterministic, 1.0=creative)",
+    )
     tools: list[AgentTool] = Field(default_factory=list)
     triggers: list[AgentTrigger] = Field(default_factory=list)
     output_channels: list[str] = Field(
@@ -143,6 +147,7 @@ class AgentCreateRequest(BaseModel):
     description: str = ""
     system_prompt: str = ""
     model: str = "llama3.1:8b"
+    temperature: float | None = Field(None, ge=0.0, le=2.0)
     tools: list[AgentTool] = Field(default_factory=list)
     triggers: list[AgentTrigger] = Field(default_factory=list)
     output_channels: list[str] = Field(default_factory=list)
@@ -159,6 +164,7 @@ class AgentUpdateRequest(BaseModel):
     description: str | None = None
     system_prompt: str | None = None
     model: str | None = None
+    temperature: float | None = Field(None, ge=0.0, le=2.0)
     tools: list[AgentTool] | None = None
     triggers: list[AgentTrigger] | None = None
     output_channels: list[str] | None = None

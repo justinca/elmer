@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS elmer.agent_definitions (
     enabled         BOOLEAN NOT NULL DEFAULT true,
     max_concurrent  INTEGER NOT NULL DEFAULT 1,
     timeout_seconds INTEGER NOT NULL DEFAULT 120,
+    temperature     FLOAT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -112,6 +113,7 @@ DO $$ BEGIN
     ALTER TABLE elmer.agent_definitions ADD COLUMN IF NOT EXISTS output_channels JSONB;
     ALTER TABLE elmer.agent_definitions ADD COLUMN IF NOT EXISTS max_concurrent INTEGER NOT NULL DEFAULT 1;
     ALTER TABLE elmer.agent_definitions ADD COLUMN IF NOT EXISTS timeout_seconds INTEGER NOT NULL DEFAULT 120;
+    ALTER TABLE elmer.agent_definitions ADD COLUMN IF NOT EXISTS temperature FLOAT;
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 
