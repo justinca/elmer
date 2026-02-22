@@ -25,7 +25,25 @@ from your general knowledge. Always cite your sources when using \
 context.
 
 Be concise, technical when appropriate, and helpful. You understand \
-amateur radio, home automation, networking, Linux, and Docker.\
+amateur radio, home automation, networking, Linux, and Docker.
+
+You can control the AllStar node (W0ABE, node 68498) using the \
+provided tools. When users ask about AllStar status, connections, \
+or want to connect/disconnect/monitor nodes, use the appropriate \
+tool. For "disconnect all", use allstar_disconnect_all. \
+When connecting to an unfamiliar node, you may use allstar_lookup \
+first to check its details. Always confirm what you did after \
+executing an action.
+
+To find an active node to connect to, use allstar_find_active to \
+get currently transmitting nodes, pick one at random, and connect.
+
+To find a node by location or description (e.g. "connect to the \
+estes park pole hill node"), use allstar_search_nodes with the \
+broadest location term (e.g. "estes park"), then examine the \
+results to find the best match for any specific detail (e.g. \
+"pole hill" in the site name). Do NOT combine all keywords into \
+one search — search broad first, then filter the results.\
 """
 
 EMBED_TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=10.0)
@@ -163,9 +181,11 @@ async def _chat_inner(
     ]
     await convo.add_message(conversation_id, "user", message, context_used=context_refs or None)
 
-    # 5. Call Ollama.
+    # 5. Call Ollama (with AllStar tools available).
+    from .chat_tools import CHAT_TOOLS
+
     try:
-        assistant_text = await _call_ollama(model, ollama_messages)
+        assistant_text = await _call_ollama(model, ollama_messages, tools=CHAT_TOOLS)
     except Exception as exc:
         error_msg = f"LLM service unavailable: {exc}"
         logger.error(error_msg)
@@ -244,9 +264,36 @@ async def _search_knowledge(query: str) -> tuple[list[SourceCitation], str]:
         except Exception:
             logger.warning("Knowledge search failed for table %s", table)
 
-    # Sort by score and take top N.
+    # Ensure each source type is represented, then fill remaining slots
+    # by score.  This prevents one table (e.g. chunked docs) from
+    # crowding out personal notes or transcriptions.
+    by_source: dict[str, list[dict[str, Any]]] = {}
+    for r in all_results:
+        by_source.setdefault(r["source"], []).append(r)
+    for v in by_source.values():
+        v.sort(key=lambda r: r["score"], reverse=True)
+
+    top: list[dict[str, Any]] = []
+    used_ids: set[tuple[str, str | None]] = set()
+
+    # First pass: guarantee top result from each source that returned hits.
+    for source in ("notes", "transcriptions", "documents"):
+        if source in by_source and by_source[source]:
+            best = by_source[source][0]
+            key = (best["source"], best.get("source_path"))
+            if key not in used_ids:
+                top.append(best)
+                used_ids.add(key)
+
+    # Second pass: fill remaining slots by global score.
     all_results.sort(key=lambda r: r["score"], reverse=True)
-    top = all_results[:KNOWLEDGE_RESULT_LIMIT]
+    for r in all_results:
+        if len(top) >= KNOWLEDGE_RESULT_LIMIT:
+            break
+        key = (r["source"], r.get("source_path"))
+        if key not in used_ids:
+            top.append(r)
+            used_ids.add(key)
 
     if not top:
         return [], ""
@@ -387,17 +434,54 @@ def _format_web_results(
 # --- Ollama call ---
 
 
+_MAX_TOOL_ROUNDS = 5
+
+
 async def _call_ollama(
     model: str,
-    messages: list[dict[str, str]],
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None = None,
 ) -> str:
-    """Send chat request to Ollama via worker, falling back to direct."""
-    payload = {
-        "model": model,
-        "messages": messages,
-        "stream": False,
-    }
+    """Send chat request to Ollama, with optional tool-calling loop."""
+    from .chat_tools import execute_tool
 
+    for round_num in range(_MAX_TOOL_ROUNDS):
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+        }
+        if tools:
+            payload["tools"] = tools
+
+        data = await _ollama_request(payload)
+
+        msg = data.get("message", {})
+        tool_calls = msg.get("tool_calls")
+
+        if not tool_calls:
+            return msg.get("content", "")
+
+        # Append the assistant message (with tool_calls) to history.
+        messages.append(msg)
+
+        # Execute each tool call and append results.
+        for tc in tool_calls:
+            fn = tc.get("function", {})
+            tool_name = fn.get("name", "")
+            tool_args = fn.get("arguments", {})
+            logger.info("Chat tool call [round %d]: %s(%s)", round_num + 1, tool_name, tool_args)
+
+            result = await execute_tool(tool_name, tool_args)
+            messages.append({"role": "tool", "content": result})
+
+    # If we exhaust rounds, return whatever content we have.
+    logger.warning("Chat tool-calling hit max rounds (%d)", _MAX_TOOL_ROUNDS)
+    return msg.get("content", "") if msg else ""
+
+
+async def _ollama_request(payload: dict[str, Any]) -> dict[str, Any]:
+    """Send a single request to Ollama via worker, falling back to direct."""
     # Try worker first.
     worker_url = f"{settings.worker_base_url}/llm/chat"
     try:
@@ -407,8 +491,8 @@ async def _call_ollama(
             if data.get("error"):
                 raise RuntimeError(data["error"])
             msg = data.get("message", {})
-            if msg and msg.get("content"):
-                return msg["content"]
+            if msg and (msg.get("content") or msg.get("tool_calls")):
+                return data
             logger.warning("Worker returned empty chat response, trying Ollama direct")
     except (httpx.RequestError, RuntimeError) as exc:
         logger.warning("Worker chat failed (%s), falling back to Ollama direct", exc)
@@ -423,8 +507,7 @@ async def _call_ollama(
     if data.get("error"):
         raise RuntimeError(data["error"])
 
-    msg = data.get("message", {})
-    return msg.get("content", "")
+    return data
 
 
 # --- Embedding helper ---
