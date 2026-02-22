@@ -77,6 +77,12 @@ export const queryKeys = {
     dashboard: (name: string) =>
       [...queryKeys.contests.all, "dashboard", name] as const,
   },
+  allstar: {
+    all: ["allstar"] as const,
+    status: () => [...queryKeys.allstar.all, "status"] as const,
+    connections: () => [...queryKeys.allstar.all, "connections"] as const,
+    nodeInfo: (node: number) => [...queryKeys.allstar.all, "node", node] as const,
+  },
   services: {
     all: ["services"] as const,
     inventory: () => [...queryKeys.services.all, "inventory"] as const,

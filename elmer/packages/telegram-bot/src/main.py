@@ -55,6 +55,7 @@ from .handlers.agents import (
     handle_agent_callback,
 )
 from .handlers.radio import (
+    cmd_allstar,
     cmd_bands,
     cmd_contest,
     cmd_dx,
@@ -67,6 +68,7 @@ from .handlers.radio import (
     cmd_prop,
     cmd_solar,
     cmd_spots,
+    handle_allstar_callback,
 )
 from .handlers.notifications import NotificationManager
 from .handlers.transcription import (
@@ -115,6 +117,7 @@ async def post_init(application: Application) -> None:
 
     # Set command menu for Telegram UI.
     await application.bot.set_my_commands([
+        BotCommand("allstar", "AllStar node status & control"),
         BotCommand("prop", "Propagation summary"),
         BotCommand("bands", "Band conditions grid"),
         BotCommand("solar", "Solar indices"),
@@ -221,6 +224,7 @@ def main() -> None:
         "runs": cmd_runs,
         "schedule": cmd_schedule,
         # Radio.
+        "allstar": cmd_allstar,
         "prop": cmd_prop,
         "bands": cmd_bands,
         "solar": cmd_solar,
@@ -259,6 +263,12 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(
         handle_agent_callback,
         pattern="^agent_",
+    ))
+
+    # Inline keyboard callbacks for AllStar actions.
+    app.add_handler(CallbackQueryHandler(
+        handle_allstar_callback,
+        pattern="^allstar_",
     ))
 
     # Catch-all: reject unauthorized users with polite message.

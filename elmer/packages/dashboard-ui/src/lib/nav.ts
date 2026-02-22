@@ -4,6 +4,7 @@ import {
   Bot,
   BookOpen,
   Radio,
+  Signal,
   LayoutDashboard,
   MessageSquare,
   FileText,
@@ -33,6 +34,12 @@ export interface NavGroup {
 
 export const navigation: NavGroup[] = [
   {
+    label: "Chat",
+    items: [
+      { label: "Chat", path: "/chat", icon: MessageSquare },
+    ],
+  },
+  {
     label: "System",
     items: [
       { label: "Status", path: "/", icon: LayoutDashboard },
@@ -47,7 +54,6 @@ export const navigation: NavGroup[] = [
       { label: "Notes", path: "/notes", icon: StickyNote },
       { label: "Transcriptions", path: "/transcriptions", icon: AudioLines },
       { label: "Search", path: "/search", icon: Search },
-      { label: "Chat", path: "/chat", icon: MessageSquare },
     ],
   },
   {
@@ -68,6 +74,7 @@ export const navigation: NavGroup[] = [
       { label: "Contests", path: "/contests", icon: Trophy },
       { label: "POTA", path: "/pota", icon: BarChart3 },
       { label: "Band Map", path: "/band-map", icon: Radio },
+      { label: "AllStar", path: "/allstar", icon: Signal },
     ],
   },
 ]

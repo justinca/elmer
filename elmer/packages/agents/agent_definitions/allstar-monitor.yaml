@@ -95,7 +95,7 @@ output_channels:
   - log
 
 config:
-  allstar_node: 1999
+  allstar_node: 68498
   shackpi_host: "shackpi"
 
 enabled: true

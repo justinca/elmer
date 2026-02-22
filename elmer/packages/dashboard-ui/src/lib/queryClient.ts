@@ -23,5 +23,6 @@ export const STALE_TIMES = {
   pota: 60_000,
   log: 60_000,
   bandScanner: 30_000,
+  allstar: 30_000,
   models: 300_000,
 } as const

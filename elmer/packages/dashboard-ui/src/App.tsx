@@ -26,6 +26,7 @@ const LogAnalysis = lazy(() => import("@/pages/LogAnalysis"))
 const Contests = lazy(() => import("@/pages/Contests"))
 const POTA = lazy(() => import("@/pages/POTA"))
 const BandScanner = lazy(() => import("@/pages/BandScanner"))
+const AllStar = lazy(() => import("@/pages/AllStar"))
 const NotFound = lazy(() => import("@/pages/NotFound"))
 
 function App() {
@@ -55,6 +56,7 @@ function App() {
                   <Route path="contests" element={<Contests />} />
                   <Route path="pota" element={<POTA />} />
                   <Route path="band-map" element={<BandScanner />} />
+                  <Route path="allstar" element={<AllStar />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>
               </Routes>

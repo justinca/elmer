@@ -18,7 +18,7 @@ Commands:
 import logging
 
 import httpx
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 
@@ -579,3 +579,258 @@ async def cmd_contest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             lines.append(f"  Exchange: {exchange}")
 
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+# -- /allstar -----------------------------------------------------------------
+
+
+async def cmd_allstar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/allstar [status|connect|disconnect|monitor|lookup] — AllStar node control."""
+    await update.message.chat.send_action(ChatAction.TYPING)
+
+    args = context.args or []
+    subcmd = args[0].lower() if args else ""
+
+    # /allstar (no args) or /allstar status — show status summary
+    if not subcmd or subcmd == "status":
+        data = await _api_get("/allstar")
+        if not data:
+            await update.message.reply_text("\u26a0\ufe0f Could not fetch AllStar status.")
+            return
+
+        stats = data.get("stats", {})
+        conns = data.get("connections", [])
+        online = stats.get("online", False)
+        status_emoji = "\U0001f7e2" if online else "\U0001f534"
+        uptime_s = int(stats.get("uptime_seconds", 0))
+        d, rem = divmod(uptime_s, 86400)
+        h, rem = divmod(rem, 3600)
+        m = rem // 60
+        uptime_str = f"{d}d {h}h {m}m" if d else f"{h}h {m}m" if h else f"{m}m"
+        keyups = stats.get("total_keyups", 0)
+        tx_time = stats.get("total_tx_time", 0)
+        kerchunks = stats.get("total_kerchunks", 0)
+        keyed = "\U0001f534 TX" if stats.get("keyed") else "\u2705 Idle"
+        version = stats.get("version", "?")
+        node_num = data.get("node", 68498)
+        callsign = data.get("callsign", "W0ABE")
+        location = data.get("location", "")
+
+        lines = [
+            f"\U0001f4e1 *AllStar Node {node_num}* ({callsign})",
+            f"Status: {status_emoji} {'Online' if online else 'Offline'}",
+            f"Uptime: {uptime_str}",
+        ]
+        if location:
+            lines.append(f"Location: {location}")
+        lines += [
+            f"Version: `{version}`",
+            "",
+            f"\U0001f4ca Keyups: *{keyups:,}* | TX: *{tx_time}s*",
+            f"Kerchunks: *{kerchunks}* | {keyed}",
+        ]
+
+        if conns:
+            lines.append(f"\n\U0001f517 *Connected Nodes ({len(conns)}):*")
+            for c in conns:
+                node_n = c.get("node", "?")
+                call = c.get("callsign", "")
+                desc = c.get("description", "")[:30]
+                call_str = f" ({call})" if call else ""
+                lines.append(f"  `{node_n}`{call_str} \u2014 {desc}")
+        else:
+            lines.append("\n_No connected nodes_")
+
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("\U0001f504 Refresh", callback_data="allstar_refresh"),
+        ]])
+        await update.message.reply_text(
+            "\n".join(lines), parse_mode="Markdown", reply_markup=keyboard,
+        )
+        return
+
+    # /allstar connect <node>
+    if subcmd == "connect":
+        if len(args) < 2 or not args[1].isdigit():
+            await update.message.reply_text(
+                "Usage: `/allstar connect <node_number>`", parse_mode="Markdown",
+            )
+            return
+        node = int(args[1])
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton(
+                f"\u2705 Connect to {node}", callback_data=f"allstar_connect:{node}",
+            ),
+            InlineKeyboardButton("\u274c Cancel", callback_data="allstar_cancel"),
+        ]])
+        await update.message.reply_text(
+            f"Connect to node *{node}* in transceive mode?",
+            parse_mode="Markdown", reply_markup=keyboard,
+        )
+        return
+
+    # /allstar disconnect <node>
+    if subcmd == "disconnect":
+        if len(args) < 2 or not args[1].isdigit():
+            await update.message.reply_text(
+                "Usage: `/allstar disconnect <node_number>`", parse_mode="Markdown",
+            )
+            return
+        node = int(args[1])
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton(
+                f"\U0001f534 Disconnect {node}", callback_data=f"allstar_disconnect:{node}",
+            ),
+            InlineKeyboardButton("\u274c Cancel", callback_data="allstar_cancel"),
+        ]])
+        await update.message.reply_text(
+            f"Disconnect from node *{node}*?",
+            parse_mode="Markdown", reply_markup=keyboard,
+        )
+        return
+
+    # /allstar monitor <node>
+    if subcmd == "monitor":
+        if len(args) < 2 or not args[1].isdigit():
+            await update.message.reply_text(
+                "Usage: `/allstar monitor <node_number>`", parse_mode="Markdown",
+            )
+            return
+        node = int(args[1])
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton(
+                f"\U0001f50a Monitor {node}", callback_data=f"allstar_monitor:{node}",
+            ),
+            InlineKeyboardButton("\u274c Cancel", callback_data="allstar_cancel"),
+        ]])
+        await update.message.reply_text(
+            f"Monitor node *{node}* (listen-only)?",
+            parse_mode="Markdown", reply_markup=keyboard,
+        )
+        return
+
+    # /allstar lookup <node>
+    if subcmd == "lookup":
+        if len(args) < 2 or not args[1].isdigit():
+            await update.message.reply_text(
+                "Usage: `/allstar lookup <node_number>`", parse_mode="Markdown",
+            )
+            return
+        node_num = int(args[1])
+        info = await _api_get(f"/allstar/node/{node_num}")
+        if not info:
+            await update.message.reply_text(
+                f"Node `{node_num}` not found in directory.", parse_mode="Markdown",
+            )
+            return
+        lines = [
+            f"\U0001f50d *Node {node_num}*",
+            "",
+            f"Callsign: *{info.get('callsign', '?')}*",
+            f"Description: {info.get('description', '?')}",
+            f"Location: {info.get('location', '?')}",
+        ]
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton(
+                "\U0001f517 Connect", callback_data=f"allstar_connect:{node_num}",
+            ),
+            InlineKeyboardButton(
+                "\U0001f50a Monitor", callback_data=f"allstar_monitor:{node_num}",
+            ),
+        ]])
+        await update.message.reply_text(
+            "\n".join(lines), parse_mode="Markdown", reply_markup=keyboard,
+        )
+        return
+
+    # Unknown subcommand
+    await update.message.reply_text(
+        "Usage: `/allstar [status|connect|disconnect|monitor|lookup]`",
+        parse_mode="Markdown",
+    )
+
+
+async def handle_allstar_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    """Handle inline keyboard button presses for AllStar actions."""
+    query = update.callback_query
+    await query.answer()
+    data = query.data or ""
+
+    if data == "allstar_refresh":
+        result = await _api_get("/allstar")
+        if not result:
+            await query.edit_message_text("\u26a0\ufe0f Could not refresh AllStar status.")
+            return
+        stats = result.get("stats", {})
+        conns = result.get("connections", [])
+        online = stats.get("online", False)
+        status_emoji = "\U0001f7e2" if online else "\U0001f534"
+        uptime_s = int(stats.get("uptime_seconds", 0))
+        d, rem = divmod(uptime_s, 86400)
+        h, rem = divmod(rem, 3600)
+        m = rem // 60
+        uptime_str = f"{d}d {h}h {m}m" if d else f"{h}h {m}m" if h else f"{m}m"
+        node_num = result.get("node", 68498)
+        callsign = result.get("callsign", "W0ABE")
+
+        lines = [
+            f"\U0001f4e1 *AllStar Node {node_num}* ({callsign})",
+            f"Status: {status_emoji} {'Online' if online else 'Offline'}",
+            f"Uptime: {uptime_str}",
+            f"\U0001f4ca Keyups: *{stats.get('total_keyups', 0):,}*",
+        ]
+        if conns:
+            lines.append(f"\n\U0001f517 *Connected ({len(conns)}):*")
+            for c in conns:
+                lines.append(f"  `{c.get('node', '?')}` {c.get('callsign', '')}")
+        else:
+            lines.append("\n_No connected nodes_")
+
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("\U0001f504 Refresh", callback_data="allstar_refresh"),
+        ]])
+        await query.edit_message_text(
+            "\n".join(lines), parse_mode="Markdown", reply_markup=keyboard,
+        )
+
+    elif data.startswith("allstar_connect:"):
+        node = int(data.split(":")[1])
+        result = await _api_post("/allstar/connect", json_data={"node": node})
+        if result and result.get("status") == "ok":
+            await query.edit_message_text(
+                f"\U0001f517 Connected to node *{node}*.\n`{result.get('output', '')}`",
+                parse_mode="Markdown",
+            )
+        else:
+            await query.edit_message_text(
+                f"\u274c Failed to connect to node *{node}*.", parse_mode="Markdown",
+            )
+
+    elif data.startswith("allstar_disconnect:"):
+        node = int(data.split(":")[1])
+        result = await _api_post("/allstar/disconnect", json_data={"node": node})
+        if result and result.get("status") == "ok":
+            await query.edit_message_text(
+                f"\U0001f517 Disconnected from node *{node}*.", parse_mode="Markdown",
+            )
+        else:
+            await query.edit_message_text(
+                f"\u274c Failed to disconnect from *{node}*.", parse_mode="Markdown",
+            )
+
+    elif data.startswith("allstar_monitor:"):
+        node = int(data.split(":")[1])
+        result = await _api_post("/allstar/monitor", json_data={"node": node})
+        if result and result.get("status") == "ok":
+            await query.edit_message_text(
+                f"\U0001f50a Monitoring node *{node}*.", parse_mode="Markdown",
+            )
+        else:
+            await query.edit_message_text(
+                f"\u274c Failed to monitor *{node}*.", parse_mode="Markdown",
+            )
+
+    elif data == "allstar_cancel":
+        await query.edit_message_text("Cancelled.")

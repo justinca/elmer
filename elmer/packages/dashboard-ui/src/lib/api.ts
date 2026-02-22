@@ -161,6 +161,20 @@ export const getContestHistory = () => api.get("/contest/history")
 export const getContestBandRec = (currentBand: string, contest?: string) =>
   api.get("/contest/recommend-band", { params: { current_band: currentBand, ...(contest && { contest }) } })
 
+// Radio - AllStar
+export const getAllstarStatus = (params?: { refresh?: boolean }) =>
+  api.get("/allstar", { params })
+export const getAllstarStats = () => api.get("/allstar/stats")
+export const getAllstarConnections = (params?: { refresh?: boolean }) =>
+  api.get("/allstar/connections", { params })
+export const getAllstarNodeInfo = (node: number) => api.get(`/allstar/node/${node}`)
+export const postAllstarConnect = (data: { node: number }) =>
+  api.post("/allstar/connect", data)
+export const postAllstarDisconnect = (data: { node: number }) =>
+  api.post("/allstar/disconnect", data)
+export const postAllstarMonitor = (data: { node: number }) =>
+  api.post("/allstar/monitor", data)
+
 // Services / Docs
 export const getDeviceInventory = () => api.get("/docs/inventory")
 export const getServiceCatalog = () => api.get("/docs/services")

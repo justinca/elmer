@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     # Timezone (used by scheduler, logging, display)
     TIMEZONE: str = "America/Denver"
 
+    # AllStar
+    ALLSTAR_NODE: int = 68498
+    ALLSTAR_SHACKPI_HOST: str = "shackpi"
+
     # Meshtastic
     MESHTASTIC_CHANNEL_TOPIC: str = "msh/US/2/json/CalvertCasa/#"
     MESHTASTIC_SEND_TOPIC: str = "msh/US/2/json/mqtt/"
