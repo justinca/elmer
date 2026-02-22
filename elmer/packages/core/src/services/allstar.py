@@ -170,7 +170,7 @@ class AllStarService:
 
     async def _rpt_fun(self, dtmf: str, action: str, remote_node: int) -> dict:
         """Execute an Asterisk rpt fun command via SSH."""
-        cmd = f"asterisk -rx 'rpt fun {self._node} {dtmf}'"
+        cmd = f"sudo /usr/sbin/asterisk -rx 'rpt fun {self._node} {dtmf}'"
         stdout, stderr, rc = await self._ssh_exec(cmd)
         if rc != 0:
             logger.warning("AllStar %s failed (rc=%d): %s", action, rc, stderr)
