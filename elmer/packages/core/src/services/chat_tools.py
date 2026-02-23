@@ -1,8 +1,8 @@
 """Chat tool definitions for Ollama tool-calling.
 
-Exposes 8 grouped dispatcher tools (allstar, log, propagation, dx, pota,
-contest, system, agent) instead of 35 individual tools, reducing the
-cognitive load on the small LLM.
+Exposes 11 grouped dispatcher tools (allstar, log, propagation, dx, pota,
+contest, system, agent, home, meshtastic, remember) instead of individual
+tools, reducing the cognitive load on the small LLM.
 """
 
 import json
@@ -381,6 +381,107 @@ CHAT_TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    # ==================================================================
+    # Home / Weather (via Home Assistant)
+    # ==================================================================
+    {
+        "type": "function",
+        "function": {
+            "name": "home",
+            "description": (
+                "Home automation and weather via Home Assistant. "
+                "Actions: weather (current conditions — temperature, humidity, wind, pressure), "
+                "summary (full home status overview), "
+                "entity (specific entity state by ID), "
+                "history (state history for an entity over time)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["weather", "summary", "entity", "history"],
+                        "description": "The action to perform.",
+                    },
+                    "entity_id": {
+                        "type": "string",
+                        "description": "Entity ID (for entity, history). e.g. 'sensor.outside_temperature', 'climate.living_room'.",
+                    },
+                    "hours": {
+                        "type": "integer",
+                        "description": "Hours of history to fetch (for history, default 24, max 168).",
+                    },
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    # ==================================================================
+    # Meshtastic
+    # ==================================================================
+    {
+        "type": "function",
+        "function": {
+            "name": "meshtastic",
+            "description": (
+                "Meshtastic mesh network communication. "
+                "Actions: status (service status and message count), "
+                "send (send a text message to the mesh network)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["status", "send"],
+                        "description": "The action to perform.",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Message text to send (for send, max 200 chars).",
+                    },
+                    "channel": {
+                        "type": "integer",
+                        "description": "Meshtastic channel number (for send, default 0).",
+                    },
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    # ==================================================================
+    # Remember (knowledge write-back)
+    # ==================================================================
+    {
+        "type": "function",
+        "function": {
+            "name": "remember",
+            "description": (
+                "Save information to the knowledge base for later retrieval. "
+                "Actions: save (store text as a knowledge document). "
+                "Use when the user says 'remember this', 'save this', or 'note that...'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["save"],
+                        "description": "The action to perform.",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "The text content to save.",
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "A short title for this knowledge entry.",
+                    },
+                },
+                "required": ["action", "text", "title"],
+            },
+        },
+    },
 ]
 
 
@@ -394,12 +495,14 @@ def _normalize_call(name: str, arguments: dict[str, Any]) -> tuple[str, str, dic
     Returns (group, action, arguments).
     """
     # Already in grouped format — action is in arguments
-    if name in ("allstar", "log", "propagation", "dx", "pota", "contest", "system", "agent"):
+    if name in ("allstar", "log", "propagation", "dx", "pota", "contest",
+                "system", "agent", "home", "meshtastic", "remember"):
         action = str(arguments.get("action", ""))
         return name, action, arguments
 
     # Backward-compat: old "prefix_action" format
-    for prefix in ("allstar", "propagation", "contest", "system", "agent", "pota", "log", "dx"):
+    for prefix in ("allstar", "propagation", "contest", "system", "agent",
+                    "pota", "log", "dx", "home", "meshtastic", "remember"):
         if name.startswith(prefix + "_"):
             action = name[len(prefix) + 1:]
             arguments.setdefault("action", action)
@@ -429,6 +532,12 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> str:
             return await _execute_system(action, arguments)
         if group == "agent":
             return await _execute_agent(action, arguments)
+        if group == "home":
+            return await _execute_home(action, arguments)
+        if group == "meshtastic":
+            return await _execute_meshtastic(action, arguments)
+        if group == "remember":
+            return await _execute_remember(action, arguments)
 
         return json.dumps({"error": f"Unknown tool: {name}"})
 
@@ -761,3 +870,103 @@ async def _execute_agent(action: str, arguments: dict[str, Any]) -> str:
         return json.dumps(data, default=str)
 
     return json.dumps({"error": f"Unknown agent action: {action}"})
+
+
+# ---------------------------------------------------------------------------
+# Home / Weather executor (via Home Assistant)
+# ---------------------------------------------------------------------------
+
+async def _execute_home(action: str, arguments: dict[str, Any]) -> str:
+    if action == "weather":
+        data = await _core_proxy("/ha/state/weather.forecast_home")
+        attrs = data.get("attributes", {})
+        result = {
+            "condition": data.get("state"),
+            "temperature": attrs.get("temperature"),
+            "temperature_unit": attrs.get("temperature_unit", "°F"),
+            "humidity": attrs.get("humidity"),
+            "wind_speed": attrs.get("wind_speed"),
+            "wind_speed_unit": attrs.get("wind_speed_unit", "mph"),
+            "wind_bearing": attrs.get("wind_bearing"),
+            "pressure": attrs.get("pressure"),
+            "pressure_unit": attrs.get("pressure_unit", "inHg"),
+        }
+        return json.dumps(result, default=str)
+
+    if action == "summary":
+        data = await _core_proxy("/ha/summary")
+        return json.dumps(data, default=str)
+
+    if action == "entity":
+        entity_id = str(arguments.get("entity_id", ""))
+        if not entity_id:
+            return json.dumps({"error": "entity_id is required"})
+        data = await _core_proxy(f"/ha/state/{entity_id}")
+        return json.dumps(data, default=str)
+
+    if action == "history":
+        entity_id = str(arguments.get("entity_id", ""))
+        if not entity_id:
+            return json.dumps({"error": "entity_id is required"})
+        hours = min(int(arguments.get("hours", 24)), 168)
+        data = await _core_proxy(
+            f"/ha/history/{entity_id}",
+            params={"hours": str(hours)},
+        )
+        return json.dumps(data, default=str)
+
+    return json.dumps({"error": f"Unknown home action: {action}"})
+
+
+# ---------------------------------------------------------------------------
+# Meshtastic executor
+# ---------------------------------------------------------------------------
+
+async def _execute_meshtastic(action: str, arguments: dict[str, Any]) -> str:
+    if action == "status":
+        data = await _core_proxy("/meshtastic/status")
+        return json.dumps(data, default=str)
+
+    if action == "send":
+        text = str(arguments.get("text", ""))
+        if not text:
+            return json.dumps({"error": "text is required"})
+        body: dict[str, Any] = {"text": text[:200]}
+        channel = arguments.get("channel")
+        if channel is not None:
+            body["channel"] = int(channel)
+        data = await _core_proxy(
+            "/meshtastic/send",
+            method="POST",
+            json_body=body,
+        )
+        return json.dumps(data, default=str)
+
+    return json.dumps({"error": f"Unknown meshtastic action: {action}"})
+
+
+# ---------------------------------------------------------------------------
+# Remember executor (knowledge write-back)
+# ---------------------------------------------------------------------------
+
+async def _execute_remember(action: str, arguments: dict[str, Any]) -> str:
+    if action == "save":
+        text = str(arguments.get("text", ""))
+        title = str(arguments.get("title", ""))
+        if not text:
+            return json.dumps({"error": "text is required"})
+        if not title:
+            return json.dumps({"error": "title is required"})
+        data = await _core_proxy(
+            "/knowledge/ingest/text",
+            method="POST",
+            json_body={
+                "text": text,
+                "title": title,
+                "source": "chat-remember",
+                "metadata": {"saved_by": "chat"},
+            },
+        )
+        return json.dumps(data, default=str)
+
+    return json.dumps({"error": f"Unknown remember action: {action}"})
