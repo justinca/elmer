@@ -5,7 +5,7 @@ import { STALE_TIMES } from "@/lib/queryClient"
 import { useDocumentTitle } from "@/hooks/useDocumentTitle"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { sendChat, getConversations, getConversation, deleteConversation, getModels } from "@/lib/api"
+import { sendChat, streamChat, getConversations, getConversation, deleteConversation, getModels } from "@/lib/api"
 import { ConversationList, type ConversationSummary } from "@/components/chat/ConversationList"
 import { MessageBubble, type ChatMessage, type SourceUsed, type WebSource } from "@/components/chat/MessageBubble"
 import { ChatInput, focusChatInput } from "@/components/chat/ChatInput"
@@ -157,7 +157,10 @@ function Chat() {
     }
   }, [deleteId, activeConvoId, handleNewConversation, queryClient])
 
-  // Send message
+  // Accumulator ref for streaming tokens — avoids stale closure issues
+  const streamAccRef = useRef("")
+
+  // Send message (streaming with non-streaming fallback)
   const handleSend = useCallback(async () => {
     const text = input.trim()
     if (!text || sending) return
@@ -173,45 +176,122 @@ function Chat() {
     setInput("")
     setSending(true)
 
+    const assistantId = `resp-${Date.now()}`
+    const chatPayload = {
+      message: text,
+      conversation_id: activeConvoId,
+      model: selectedModel || undefined,
+      web_search: webSearch,
+    }
+
+    // Try streaming first
     try {
-      const { data } = await sendChat({
-        message: text,
-        conversation_id: activeConvoId,
-        model: selectedModel || undefined,
-        web_search: webSearch,
-      })
-
-      const assistantMsg: ChatMessage = {
-        id: `resp-${Date.now()}`,
-        role: "assistant",
-        content: data.response,
-        timestamp: new Date(),
-        conversationId: data.conversation_id,
-        sourcesUsed: data.sources_used,
-        webSearchPerformed: data.web_search_performed,
-        webSearchQuery: data.web_search_query,
-        webSources: data.web_sources,
-      }
-
-      setMessages((prev) => [...prev, assistantMsg])
-
-      // Update active conversation ID if this was the first message
-      if (!activeConvoId && data.conversation_id) {
-        setActiveConvoId(data.conversation_id)
-      }
-
-      // Refresh conversation list
-      queryClient.invalidateQueries({ queryKey: queryKeys.chat.conversations() })
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : "Failed to send message"
-      const errChat: ChatMessage = {
-        id: `err-${Date.now()}`,
+      // Insert placeholder assistant message immediately
+      const placeholder: ChatMessage = {
+        id: assistantId,
         role: "assistant",
         content: "",
         timestamp: new Date(),
-        error: errorMsg,
+        streaming: true,
       }
-      setMessages((prev) => [...prev, errChat])
+      setMessages((prev) => [...prev, placeholder])
+      streamAccRef.current = ""
+
+      let streamSources: { sources_used?: unknown[]; web_sources?: unknown[] } = {}
+      let streamDone = false
+      let rafPending = false
+
+      await streamChat(chatPayload, {
+        onSources(data) {
+          streamSources = data
+          // Stop showing typing indicator once sources arrive (tool phase running)
+        },
+        onToken(t) {
+          streamAccRef.current += t
+          // Batch state updates with rAF to avoid excessive re-renders
+          if (!rafPending) {
+            rafPending = true
+            requestAnimationFrame(() => {
+              rafPending = false
+              const acc = streamAccRef.current
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, content: acc, streaming: true } : m,
+                ),
+              )
+            })
+          }
+        },
+        onDone(data) {
+          streamDone = true
+          // Final update: mark streaming complete, attach sources + conversation
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    content: streamAccRef.current,
+                    streaming: false,
+                    conversationId: data.conversation_id,
+                    sourcesUsed: streamSources.sources_used as SourceUsed[] | undefined,
+                    webSources: streamSources.web_sources as WebSource[] | undefined,
+                  }
+                : m,
+            ),
+          )
+          if (!activeConvoId && data.conversation_id) {
+            setActiveConvoId(data.conversation_id)
+          }
+          queryClient.invalidateQueries({ queryKey: queryKeys.chat.conversations() })
+        },
+        onError(error) {
+          if (!streamDone) {
+            // Remove placeholder and fall through to non-streaming
+            setMessages((prev) => prev.filter((m) => m.id !== assistantId))
+            throw new Error(error)
+          }
+        },
+      })
+
+      if (!streamDone) {
+        // Stream ended without done event — remove placeholder and fall back
+        setMessages((prev) => prev.filter((m) => m.id !== assistantId))
+        throw new Error("Stream ended unexpectedly")
+      }
+    } catch {
+      // Fallback to non-streaming
+      try {
+        const { data } = await sendChat(chatPayload)
+
+        const assistantMsg: ChatMessage = {
+          id: `resp-fallback-${Date.now()}`,
+          role: "assistant",
+          content: data.response,
+          timestamp: new Date(),
+          conversationId: data.conversation_id,
+          sourcesUsed: data.sources_used,
+          webSearchPerformed: data.web_search_performed,
+          webSearchQuery: data.web_search_query,
+          webSources: data.web_sources,
+        }
+
+        setMessages((prev) => [...prev, assistantMsg])
+
+        if (!activeConvoId && data.conversation_id) {
+          setActiveConvoId(data.conversation_id)
+        }
+        queryClient.invalidateQueries({ queryKey: queryKeys.chat.conversations() })
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Failed to send message"
+        const errChat: ChatMessage = {
+          id: `err-${Date.now()}`,
+          role: "assistant",
+          content: "",
+          timestamp: new Date(),
+          error: errorMsg,
+        }
+        setMessages((prev) => [...prev, errChat])
+      }
     } finally {
       setSending(false)
       setTimeout(focusChatInput, 50)
@@ -373,7 +453,7 @@ function Chat() {
                   onRetry={msg.error ? handleRetry : undefined}
                 />
               ))}
-              {sending && <TypingIndicator />}
+              {sending && !messages.some((m) => m.streaming) && <TypingIndicator />}
               <div ref={messagesEndRef} />
             </div>
           )}

@@ -29,6 +29,7 @@ export interface ChatMessage {
   webSearchQuery?: string
   webSources?: WebSource[]
   error?: string
+  streaming?: boolean
 }
 
 interface MessageBubbleProps {
@@ -85,6 +86,8 @@ export function MessageBubble({ message, onShowSources, onRetry }: MessageBubble
             </div>
           ) : isUser ? (
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+          ) : message.streaming ? (
+            <p className="text-sm whitespace-pre-wrap">{message.content}<span className="inline-block w-1.5 h-4 ml-0.5 bg-foreground/60 animate-pulse align-text-bottom" /></p>
           ) : (
             <MarkdownRenderer content={message.content} />
           )}

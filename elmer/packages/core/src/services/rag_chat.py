@@ -27,81 +27,81 @@ context.
 Be concise, technical when appropriate, and helpful. You understand \
 amateur radio, home automation, networking, Linux, and Docker.
 
-IMPORTANT: You have many tools. You MUST call them to perform \
-actions or look up data. NEVER generate fake tool output or pretend \
-a tool ran.
+IMPORTANT: You have 8 tools, each with an "action" parameter. You \
+MUST call them to perform actions or look up data. NEVER generate \
+fake tool output or pretend a tool ran.
 
-AllStar tools (node 68498, W0ABE):
-- allstar_status: get node status and connections
-- allstar_connect: connect to a specific node number
-- allstar_disconnect: disconnect from a specific node
-- allstar_disconnect_all: disconnect from all nodes
-- allstar_monitor: monitor a node (listen-only)
-- allstar_lookup: look up a node in the directory
-- allstar_find_active: list currently transmitting nodes
-- allstar_search_nodes: search nodes by location/callsign
-- allstar_connect_active: find an active node AND connect
-- allstar_search_and_connect: search for a node AND connect
+allstar(action, node?, query?, filter?) — AllStar node 68498, W0ABE:
+  status: node status/connections
+  connect: connect to a node (node=)
+  disconnect: disconnect a node (node=)
+  disconnect_all: disconnect all nodes
+  monitor: listen-only to a node (node=)
+  lookup: directory info for a node (node=)
+  find_active: list currently transmitting nodes
+  search_nodes: search by location/callsign (query=)
+  connect_active: pick a random active node and connect
+  search_and_connect: search and connect to best match (query=, filter=)
 
-Log/QSO tools (Log4OM logbook):
-- log_recent_qsos: most recent QSOs
-- log_search_qsos: search by callsign, band, mode, country, date
-- log_stats: totals by band, mode, DXCC
-- log_dxcc: DXCC entity summary
+log(action, limit?, call?, band?, mode?, country?, since?, until?) — Log4OM logbook:
+  recent_qsos: most recent QSOs (limit=)
+  search_qsos: search by callsign/band/mode/country/date
+  stats: totals by band, mode, DXCC
+  dxcc: DXCC entity summary
 
-Propagation tools:
-- propagation_conditions: solar indices, band conditions (day/night)
-- propagation_band_detail: detail for a specific band
-- propagation_forecast: HF propagation forecast
+propagation(action, band?) — HF propagation:
+  conditions: solar indices, band conditions (day/night)
+  band_detail: detail for one band (band=)
+  forecast: predicted conditions
 
-DX cluster tools:
-- dx_spots: recent DX spots (filter by band/mode/entity)
-- dx_spots_summary: cluster activity summary
-- dx_lookup_entity: callsign to DXCC entity lookup
-- dx_get_needs: DX needs list
-- dx_add_need: add entity/band/mode to needs
-- dx_remove_need: remove a need by ID
+dx(action, band?, mode?, entity?, callsign?, priority?, need_id?, limit?) — DX cluster:
+  spots: recent DX spots (filter by band/mode/entity)
+  spots_summary: cluster activity summary
+  lookup_entity: callsign → DXCC entity (callsign=)
+  get_needs: DX needs list
+  add_need: add entity/band/mode need (entity=, band=, mode=, priority=)
+  remove_need: remove a need (need_id=)
 
-POTA tools:
-- pota_spots: current park activator spots
-- pota_search_parks: search parks by state or name
-- pota_nearby_parks: parks near a grid square
-- pota_plan_activation: full activation plan for a park
+pota(action, state?, name?, grid?, radius?, reference?) — Parks on the Air:
+  spots: current activator spots
+  search_parks: find parks (state=, name=)
+  nearby_parks: parks near a grid (grid=, radius=)
+  plan_activation: activation plan for a park (reference=)
 
-Contest tools:
-- contest_upcoming: upcoming contest calendar
-- contest_recommend_band: band change recommendation
-- contest_dashboard: live contest score/rates
+contest(action, days?, current_band?, contest?) — Ham radio contests:
+  upcoming: upcoming contest calendar (days=)
+  recommend_band: band change advice (current_band=, contest=)
+  dashboard: live contest scoring (contest=)
 
-System tools:
-- system_status: core health and all node statuses
-- system_scheduler: scheduled task status
+system(action) — System health:
+  status: core health and all node statuses
+  scheduler: scheduled task fire times
 
-Agent tools:
-- agent_list: list all AI agents
-- agent_trigger: manually run an agent
-- agent_recent_runs: recent agent execution history
+agent(action, name?, limit?) — AI agents:
+  list: all agents with triggers/status
+  trigger: manually run an agent (name=)
+  recent_runs: recent execution history (limit=)
 
 Tool selection examples:
-- "how are the bands?" → propagation_conditions
-- "is 20m open?" → propagation_band_detail with band="20m"
-- "propagation forecast" → propagation_forecast
-- "any DX spots on 40m?" → dx_spots with band="40m"
-- "look up JA1ABC" → dx_lookup_entity with callsign="JA1ABC"
-- "what do I still need?" → dx_get_needs
-- "add Japan 20m CW to needs" → dx_add_need
-- "who's activating POTA?" → pota_spots
-- "parks near me" → pota_nearby_parks
-- "plan activation for US-1228" → pota_plan_activation
-- "any contests this weekend?" → contest_upcoming with days=7
-- "what band should I switch to?" → contest_recommend_band
-- "is everything online?" → system_status
-- "run the daily briefing" → agent_trigger with name="daily-briefing"
-- "what agents do we have?" → agent_list
-- "connect to an active node" → allstar_connect_active
-- "connect to estes park" → allstar_search_and_connect
-- "summarize today's QSOs" → log_search_qsos with since=today
-- "DXCC progress" → log_dxcc
+- "how are the bands?" → propagation(action="conditions")
+- "is 20m open?" → propagation(action="band_detail", band="20m")
+- "propagation forecast" → propagation(action="forecast")
+- "any DX spots on 40m?" → dx(action="spots", band="40m")
+- "look up JA1ABC" → dx(action="lookup_entity", callsign="JA1ABC")
+- "what do I still need?" → dx(action="get_needs")
+- "add Japan 20m CW to needs" → dx(action="add_need", entity="Japan", band="20m", mode="CW")
+- "who's activating POTA?" → pota(action="spots")
+- "parks near me" → pota(action="nearby_parks")
+- "plan activation for US-1228" → pota(action="plan_activation", reference="US-1228")
+- "any contests this weekend?" → contest(action="upcoming", days=7)
+- "what band should I switch to?" → contest(action="recommend_band", current_band="20m")
+- "is everything online?" → system(action="status")
+- "run the daily briefing" → agent(action="trigger", name="daily-briefing")
+- "what agents do we have?" → agent(action="list")
+- "connect to an active node" → allstar(action="connect_active")
+- "connect to estes park" → allstar(action="search_and_connect", query="estes park")
+- "summarize today's QSOs" → log(action="search_qsos", since="YYYY-MM-DD")
+- "DXCC progress" → log(action="dxcc")
 
 If the user asks what you can do, what tools you have, or about your \
 capabilities — answer in plain English. List your abilities in a \
@@ -146,6 +146,18 @@ class ChatResponse:
     web_sources: list[dict[str, str]] = field(default_factory=list)
 
 
+@dataclass
+class _PreparedChat:
+    """Intermediate state after knowledge/web search, before Ollama call."""
+
+    conversation_id: int
+    sources_used: list[SourceCitation]
+    web_sources: list[dict[str, str]]
+    web_search_performed: bool
+    web_search_query: str
+    ollama_messages: list[dict[str, Any]]
+
+
 async def chat(
     message: str,
     conversation_id: int | None = None,
@@ -153,27 +165,95 @@ async def chat(
     channel: str = "api",
     web_search: str = "auto",
 ) -> ChatResponse:
-    """Process a chat message with RAG context augmentation.
-
-    Steps:
-      1. Create or load conversation
-      2. Embed user message and search knowledge base
-      2b. Decide whether to web search, execute if needed
-      3. Build augmented prompt (system + context + history + message)
-      4. Send to Ollama via worker (with fallback)
-      5. Store messages and return response with citations
-    """
+    """Process a chat message with RAG context augmentation."""
     async with _chat_semaphore:
         return await _chat_inner(message, conversation_id, model, channel, web_search)
 
 
-async def _chat_inner(
+async def chat_stream(
+    message: str,
+    conversation_id: int | None = None,
+    model: str = "llama3.1:8b",
+    channel: str = "api",
+    web_search: str = "auto",
+):
+    """Async generator yielding SSE events for a streaming chat response.
+
+    Events:
+      event: sources   data: {sources_used, web_sources}
+      event: token     data: {t: "chunk"}
+      event: done      data: {conversation_id, model}
+      event: error     data: {error: "message"}
+    """
+    async with _chat_semaphore:
+        async for event in _chat_stream_inner(
+            message, conversation_id, model, channel, web_search,
+        ):
+            yield event
+
+
+async def _chat_stream_inner(
     message: str,
     conversation_id: int | None,
     model: str,
     channel: str,
     web_search: str,
-) -> ChatResponse:
+):
+    """Inner streaming implementation."""
+    try:
+        prep = await _prepare_chat(message, conversation_id, model, channel, web_search)
+    except Exception as exc:
+        yield _sse("error", {"error": str(exc)})
+        return
+
+    # Emit sources immediately so the UI can show them.
+    yield _sse("sources", {
+        "sources_used": [
+            {"source": s.source, "source_path": s.source_path, "score": s.score, "snippet": s.snippet}
+            for s in prep.sources_used
+        ],
+        "web_sources": prep.web_sources,
+    })
+
+    # Run tool-calling loop (non-streaming), then yield final text in chunks.
+    from .chat_tools import CHAT_TOOLS
+
+    try:
+        assistant_text = await _call_ollama(model, prep.ollama_messages, tools=CHAT_TOOLS)
+    except Exception as exc:
+        error_msg = f"LLM service unavailable: {exc}"
+        logger.error(error_msg)
+        yield _sse("error", {"error": error_msg})
+        return
+
+    # Store assistant response.
+    await convo.add_message(prep.conversation_id, "assistant", assistant_text)
+
+    # Yield text in ~20-char chunks for streaming feel.
+    chunk_size = 20
+    for i in range(0, len(assistant_text), chunk_size):
+        yield _sse("token", {"t": assistant_text[i : i + chunk_size]})
+        await asyncio.sleep(0.01)  # tiny pacing
+
+    yield _sse("done", {
+        "conversation_id": prep.conversation_id,
+        "model": model,
+    })
+
+
+def _sse(event: str, data: dict[str, Any]) -> str:
+    """Format a single SSE event string."""
+    return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
+
+
+async def _prepare_chat(
+    message: str,
+    conversation_id: int | None,
+    model: str,
+    channel: str,
+    web_search: str,
+) -> _PreparedChat:
+    """Shared setup: conversation, knowledge search, web search, messages."""
     # 1. Create or load conversation.
     if conversation_id is None:
         conversation_id = await convo.create_conversation(channel=channel)
@@ -245,11 +325,29 @@ async def _chat_inner(
     ]
     await convo.add_message(conversation_id, "user", message, context_used=context_refs or None)
 
-    # 5. Call Ollama (with AllStar tools available).
+    return _PreparedChat(
+        conversation_id=conversation_id,
+        sources_used=sources_used,
+        web_sources=web_source_list,
+        web_search_performed=search_performed,
+        web_search_query=search_query,
+        ollama_messages=ollama_messages,
+    )
+
+
+async def _chat_inner(
+    message: str,
+    conversation_id: int | None,
+    model: str,
+    channel: str,
+    web_search: str,
+) -> ChatResponse:
+    prep = await _prepare_chat(message, conversation_id, model, channel, web_search)
+
     from .chat_tools import CHAT_TOOLS
 
     try:
-        assistant_text = await _call_ollama(model, ollama_messages, tools=CHAT_TOOLS)
+        assistant_text = await _call_ollama(model, prep.ollama_messages, tools=CHAT_TOOLS)
     except Exception as exc:
         error_msg = f"LLM service unavailable: {exc}"
         logger.error(error_msg)
@@ -257,23 +355,22 @@ async def _chat_inner(
             response="I'm sorry, I can't respond right now — the LLM service "
                      "appears to be offline. Please check that Ollama is running "
                      "on the worker machine.",
-            conversation_id=conversation_id,
+            conversation_id=prep.conversation_id,
             model=model,
-            sources_used=sources_used,
+            sources_used=prep.sources_used,
             error=error_msg,
         )
 
-    # 6. Store assistant response.
-    await convo.add_message(conversation_id, "assistant", assistant_text)
+    await convo.add_message(prep.conversation_id, "assistant", assistant_text)
 
     return ChatResponse(
         response=assistant_text,
-        conversation_id=conversation_id,
+        conversation_id=prep.conversation_id,
         model=model,
-        sources_used=sources_used,
-        web_search_performed=search_performed,
-        web_search_query=search_query,
-        web_sources=web_source_list,
+        sources_used=prep.sources_used,
+        web_search_performed=prep.web_search_performed,
+        web_search_query=prep.web_search_query,
+        web_sources=prep.web_sources,
     )
 
 
@@ -504,13 +601,12 @@ _MAX_TOOL_ROUNDS = 5
 def _extract_text_tool_call(content: str) -> dict[str, Any] | None:
     """Detect a tool call emitted as plain text by small models.
 
-    Handles multiple formats the model may produce:
-      {"name": "tool", "parameters": {...}}
-      {"name": "tool", "args": {...}}
-      {"name": "tool", "arguments": {...}}
+    Looks for JSON like ``{"name": "tool_name", "parameters": {...}}``
+    (or "arguments" / "args") embedded in the content and converts it
+    to the Ollama tool_call format.
     Returns ``None`` if the content doesn't look like a tool call.
     """
-    # Find all top-level JSON objects by matching balanced braces.
+    # Balanced-brace parser: find all top-level JSON objects.
     candidates: list[str] = []
     depth = 0
     start = -1
@@ -530,7 +626,6 @@ def _extract_text_tool_call(content: str) -> dict[str, Any] | None:
             obj = json.loads(raw)
         except (json.JSONDecodeError, ValueError):
             continue
-
         if not isinstance(obj, dict):
             continue
 
@@ -538,7 +633,6 @@ def _extract_text_tool_call(content: str) -> dict[str, Any] | None:
         if not name:
             continue
 
-        # Accept "parameters", "args", or "arguments" as the params key.
         params = (
             obj.get("parameters")
             or obj.get("arguments")
