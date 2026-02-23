@@ -1,6 +1,6 @@
 """Chat tool definitions for Ollama tool-calling.
 
-Exposes AllStar operations as tools the chat LLM can invoke.
+Exposes AllStar and Log4OM operations as tools the chat LLM can invoke.
 """
 
 import json
@@ -9,6 +9,23 @@ from dataclasses import asdict
 from typing import Any
 
 logger = logging.getLogger("elmer.chat_tools")
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+async def _log_proxy(path: str, params: dict[str, Any] | None = None) -> Any:
+    """Call a Core /log/* endpoint internally."""
+    import httpx
+    from ..config import settings
+
+    url = f"{settings.worker_base_url}/log4om{path}"
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(url, params=params)
+        resp.raise_for_status()
+        return resp.json()
+
 
 # ---------------------------------------------------------------------------
 # Tool definitions (Ollama tool-calling format)
@@ -193,6 +210,105 @@ CHAT_TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    # ------------------------------------------------------------------
+    # Log / QSO tools
+    # ------------------------------------------------------------------
+    {
+        "type": "function",
+        "function": {
+            "name": "log_recent_qsos",
+            "description": (
+                "Get the most recent QSOs from the Log4OM logbook. "
+                "Use this when the user asks about recent contacts, today's QSOs, "
+                "or wants a summary of recent activity."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Number of recent QSOs to return (default 20, max 100).",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "log_search_qsos",
+            "description": (
+                "Search QSOs with filters. Use this to find contacts by callsign, "
+                "band, mode, country, or date range. For 'today' use since=today's "
+                "date in YYYY-MM-DD format."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "call": {
+                        "type": "string",
+                        "description": "Filter by callsign (partial match).",
+                    },
+                    "band": {
+                        "type": "string",
+                        "description": "Filter by band (e.g. '20m', '40m').",
+                    },
+                    "mode": {
+                        "type": "string",
+                        "description": "Filter by mode (e.g. 'FT8', 'SSB', 'CW').",
+                    },
+                    "country": {
+                        "type": "string",
+                        "description": "Filter by DXCC country name.",
+                    },
+                    "since": {
+                        "type": "string",
+                        "description": "Start date in YYYY-MM-DD format.",
+                    },
+                    "until": {
+                        "type": "string",
+                        "description": "End date in YYYY-MM-DD format.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results (default 50, max 500).",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "log_stats",
+            "description": (
+                "Get aggregate log statistics: total QSOs, breakdown by band, "
+                "mode, top DXCC entities worked. Use for overall log summaries."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "log_dxcc",
+            "description": (
+                "Get DXCC entity summary — which countries/entities have been worked "
+                "and confirmed. Use when user asks about DXCC progress or countries worked."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
 ]
 
 
@@ -299,6 +415,31 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> str:
                 "connect_result": result,
                 "total_matches": len(results),
             })
+
+        # -- Log / QSO tools -------------------------------------------
+
+        elif name == "log_recent_qsos":
+            limit = min(int(arguments.get("limit", 20)), 100)
+            data = await _log_proxy("/recent", {"limit": limit})
+            return json.dumps(data, default=str)
+
+        elif name == "log_search_qsos":
+            params: dict[str, Any] = {}
+            for key in ("call", "band", "mode", "country", "since", "until"):
+                val = arguments.get(key)
+                if val:
+                    params[key] = val
+            params["limit"] = min(int(arguments.get("limit", 50)), 500)
+            data = await _log_proxy("/qsos", params)
+            return json.dumps(data, default=str)
+
+        elif name == "log_stats":
+            data = await _log_proxy("/stats")
+            return json.dumps(data, default=str)
+
+        elif name == "log_dxcc":
+            data = await _log_proxy("/dxcc")
+            return json.dumps(data, default=str)
 
         else:
             return json.dumps({"error": f"Unknown tool: {name}"})
