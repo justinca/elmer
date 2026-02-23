@@ -322,7 +322,7 @@ function BandScanner() {
                       className={cn(
                         "text-[10px] w-12 justify-center",
                         (isNight ? b.condition_night : b.condition_day).toLowerCase() === "good"
-                          ? "text-emerald-500"
+                          ? "text-blue-500"
                           : (isNight ? b.condition_night : b.condition_day).toLowerCase() === "fair"
                             ? "text-amber-500"
                             : "text-red-500",

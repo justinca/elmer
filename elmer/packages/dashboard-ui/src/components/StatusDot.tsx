@@ -8,10 +8,10 @@ interface StatusDotProps {
 }
 
 const statusColors = {
-  healthy: "bg-emerald-500",
-  degraded: "bg-amber-500",
-  down: "bg-red-500",
-  unknown: "bg-gray-500",
+  healthy: "bg-[#10B981]",
+  degraded: "bg-[#EAB308]",
+  down: "bg-[#EF4444]",
+  unknown: "bg-[#94A3B8]",
 }
 
 const sizes = {

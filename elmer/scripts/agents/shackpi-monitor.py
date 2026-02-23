@@ -160,6 +160,17 @@ def build_heartbeat(status: str = "online") -> dict:
 def on_connect(client, userdata, flags, reason_code, properties=None):
     if reason_code == 0:
         logger.info("Connected to MQTT broker at %s:%s", MQTT_HOST, MQTT_PORT)
+        # Re-publish online status on every (re)connection so the retained
+        # status topic is corrected after the will message fired "offline".
+        client.publish(TOPIC_STATUS, json.dumps("online"), retain=True)
+        # Send an immediate heartbeat so Core picks up the recovery quickly
+        # instead of waiting up to 30s for the next scheduled one.
+        try:
+            payload = build_heartbeat()
+            client.publish(TOPIC_HEARTBEAT, json.dumps(payload, default=str))
+            logger.info("Sent recovery heartbeat")
+        except Exception:
+            logger.debug("Could not send recovery heartbeat", exc_info=True)
     else:
         logger.warning("MQTT connect failed: reason_code=%s", reason_code)
 
@@ -202,9 +213,6 @@ def main():
         logger.error("Initial MQTT connect failed: %s — will retry", exc)
 
     client.loop_start()
-
-    # Publish online status (retained)
-    client.publish(TOPIC_STATUS, json.dumps("online"), retain=True)
 
     # Prime psutil CPU measurement (first call always returns 0.0)
     psutil.cpu_percent(interval=0)

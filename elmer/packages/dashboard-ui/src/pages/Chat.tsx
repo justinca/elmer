@@ -45,13 +45,12 @@ function Chat() {
   // Models via useQuery
   const { data: models = [] } = useQuery({
     queryKey: queryKeys.chat.models(),
-    queryFn: () =>
-      getModels().then(({ data }) =>
-        ((data.models || []) as Array<{ name: string; size?: number }>).map((m) => ({
-          name: m.name,
-          size: m.size ?? null,
-        })) as Model[],
-      ),
+    queryFn: () => getModels().then(({ data }) => (data.models || []) as Array<{ name: string; size?: number }>),
+    select: (data) =>
+      (Array.isArray(data) ? data : []).map((m: { name: string; size?: number }) => ({
+        name: m.name,
+        size: m.size ?? null,
+      })) as Model[],
     staleTime: STALE_TIMES.models,
   })
 
@@ -70,8 +69,8 @@ function Chat() {
   // Settings
   const [webSearch, setWebSearch] = useState<WebSearchMode>("auto")
 
-  // UI
-  const [showLeftPanel, setShowLeftPanel] = useState(true)
+  // UI — conversation list closed by default
+  const [showLeftPanel, setShowLeftPanel] = useState(false)
   const [showRightPanel, setShowRightPanel] = useState(false)
   const [panelSources, setPanelSources] = useState<SourceUsed[]>([])
   const [panelWebSources, setPanelWebSources] = useState<WebSource[]>([])
@@ -107,6 +106,8 @@ function Chat() {
   const loadConversation = useCallback(async (id: number) => {
     setActiveConvoId(id)
     setMessages([])
+    // Close panel on mobile after selection
+    if (window.innerWidth < 768) setShowLeftPanel(false)
     try {
       const { data } = await getConversation(id)
       const msgs: ChatMessage[] = (data.messages || []).map(
@@ -280,11 +281,21 @@ function Chat() {
 
   return (
     <div className="flex h-full w-full overflow-hidden">
+      {/* Mobile backdrop for left panel */}
+      {showLeftPanel && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setShowLeftPanel(false)}
+        />
+      )}
+
       {/* Left panel -- Conversation list */}
       <div
         className={cn(
           "border-r bg-background transition-all duration-200",
-          showLeftPanel ? "w-64 min-w-[16rem]" : "w-0 min-w-0 overflow-hidden border-r-0",
+          showLeftPanel
+            ? "fixed inset-y-0 left-0 z-50 w-72 md:relative md:w-64 md:min-w-[16rem]"
+            : "w-0 min-w-0 overflow-hidden border-r-0",
         )}
       >
         {showLeftPanel && (
@@ -394,11 +405,21 @@ function Chat() {
         </div>
       </div>
 
+      {/* Mobile backdrop for right panel */}
+      {showRightPanel && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setShowRightPanel(false)}
+        />
+      )}
+
       {/* Right panel -- Sources */}
       <div
         className={cn(
           "border-l bg-background transition-all duration-200",
-          showRightPanel ? "w-72 min-w-[18rem]" : "w-0 min-w-0 overflow-hidden border-l-0",
+          showRightPanel
+            ? "fixed inset-y-0 right-0 z-50 w-72 md:relative md:min-w-[18rem]"
+            : "w-0 min-w-0 overflow-hidden border-l-0",
         )}
       >
         {showRightPanel && (

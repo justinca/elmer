@@ -6,6 +6,7 @@ import { LoadingSpinner } from "./LoadingSpinner"
 import { Breadcrumbs } from "./Breadcrumbs"
 import { NotificationBell } from "./NotificationBell"
 import { CommandPalette } from "./CommandPalette"
+import { ElmerIcon } from "./ElmerIcon"
 
 export function AppLayout() {
   const location = useLocation()
@@ -54,9 +55,10 @@ export function AppLayout() {
       <main className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile header */}
         <div className="flex h-14 items-center justify-between border-b px-4 md:hidden">
-          <div className="flex items-center">
+          <div className="flex items-center gap-1">
             <MobileSidebar />
-            <span className="ml-2 text-lg font-bold text-primary">Elmer</span>
+            <ElmerIcon size={20} />
+            <span className="text-lg font-bold text-primary">Elmer</span>
           </div>
           <NotificationBell />
         </div>
@@ -71,7 +73,7 @@ export function AppLayout() {
             </div>
           </div>
         ) : (
-          <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
+          <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 texture-dots">
             <Suspense fallback={<LoadingSpinner label="Loading..." />}>
               <div key={location.pathname} className="animate-in fade-in duration-150">
                 <Breadcrumbs />

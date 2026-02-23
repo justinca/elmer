@@ -68,7 +68,7 @@ interface RunSummary {
 }
 
 const statusColors: Record<string, string> = {
-  completed: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  completed: "bg-blue-500/10 text-blue-600 border-blue-500/20",
   failed: "bg-destructive/10 text-destructive border-destructive/20",
   timeout: "bg-amber-500/10 text-amber-600 border-amber-500/20",
   running: "bg-blue-500/10 text-blue-600 border-blue-500/20",

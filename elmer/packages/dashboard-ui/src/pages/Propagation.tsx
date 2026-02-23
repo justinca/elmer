@@ -54,7 +54,7 @@ const BAND_ORDER = ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12
 
 function conditionColor(cond: string) {
   const c = cond?.toLowerCase()
-  if (c === "good") return "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+  if (c === "good") return "bg-blue-500/15 text-blue-600 border-blue-500/30"
   if (c === "fair") return "bg-amber-500/15 text-amber-600 border-amber-500/30"
   if (c === "poor") return "bg-red-500/15 text-red-600 border-red-500/30"
   return "bg-muted text-muted-foreground"
@@ -62,21 +62,21 @@ function conditionColor(cond: string) {
 
 function kColor(k: number | null) {
   if (k === null) return "text-muted-foreground"
-  if (k < 3) return "text-emerald-500"
+  if (k < 3) return "text-blue-500"
   if (k <= 5) return "text-amber-500"
   return "text-red-500"
 }
 
 function aColor(a: number | null) {
   if (a === null) return "text-muted-foreground"
-  if (a < 10) return "text-emerald-500"
+  if (a < 10) return "text-blue-500"
   if (a <= 20) return "text-amber-500"
   return "text-red-500"
 }
 
 function sfiColor(sfi: number | null) {
   if (sfi === null) return "text-muted-foreground"
-  if (sfi >= 150) return "text-emerald-500"
+  if (sfi >= 150) return "text-blue-500"
   if (sfi >= 100) return "text-amber-500"
   return "text-red-500"
 }
@@ -198,7 +198,7 @@ function Propagation() {
                 <span
                   className={cn(
                     "inline-block h-2 rounded-full",
-                    data.k_index < 3 ? "bg-emerald-500" : data.k_index <= 5 ? "bg-amber-500" : "bg-red-500",
+                    data.k_index < 3 ? "bg-blue-500" : data.k_index <= 5 ? "bg-amber-500" : "bg-red-500",
                   )}
                   style={{ width: `${Math.min((data.k_index / 9) * 100, 100)}%`, minWidth: "4px" }}
                 />
@@ -216,7 +216,7 @@ function Propagation() {
           label="Geomag Storm"
           value={data?.geomag_storm || "None"}
           icon={Wind}
-          color={data?.geomag_storm && data.geomag_storm !== "None" ? "text-red-500" : "text-emerald-500"}
+          color={data?.geomag_storm && data.geomag_storm !== "None" ? "text-red-500" : "text-blue-500"}
         />
       </div>
 
@@ -323,8 +323,8 @@ function Propagation() {
                 />
                 <RTooltip
                   contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
+                    backgroundColor: "var(--card)",
+                    border: "1px solid var(--border)",
                     borderRadius: "8px",
                     fontSize: "12px",
                   }}
@@ -334,7 +334,7 @@ function Propagation() {
                   yAxisId="sfi"
                   type="monotone"
                   dataKey="sfi"
-                  stroke="hsl(var(--primary))"
+                  stroke="#2563EB"
                   strokeWidth={2}
                   dot={false}
                   name="Solar Flux"
@@ -343,8 +343,8 @@ function Propagation() {
                   yAxisId="k"
                   type="stepAfter"
                   dataKey="k"
-                  fill="hsl(var(--destructive) / 0.2)"
-                  stroke="hsl(var(--destructive))"
+                  fill="rgba(239, 68, 68, 0.2)"
+                  stroke="#ef4444"
                   strokeWidth={1}
                   name="K-Index"
                 />
@@ -379,7 +379,7 @@ function Propagation() {
                   <p className="text-xs font-medium text-muted-foreground">SFI Trend</p>
                   <p className="text-sm mt-0.5 flex items-center gap-1">
                     {forecast.solar_flux_trend.includes("above") ? (
-                      <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                      <TrendingUp className="h-3.5 w-3.5 text-blue-500" />
                     ) : forecast.solar_flux_trend.includes("below") ? (
                       <TrendingDown className="h-3.5 w-3.5 text-red-500" />
                     ) : (

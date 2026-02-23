@@ -2,9 +2,8 @@
 # Daily Briefing Agent
 # =============================================================
 # Compiles a concise morning summary and sends it to Telegram.
-# Covers system health, overnight events, new content, weather,
-# and band conditions — designed for a quick phone read with
-# morning coffee.
+# Covers weather, calendar, propagation, DX activity, and system
+# health — designed for a quick phone read with morning coffee.
 #
 # Triggers:
 #   - Schedule: daily at 7am (cron: 0 7 * * *)
@@ -20,83 +19,55 @@ name: daily-briefing
 display_name: Daily Briefing
 
 description: >
-  Morning briefing agent for W0ABE. Gathers system health, overnight
-  alerts, new knowledge base content, weather data, and band conditions,
-  then composes a concise Telegram summary for quick morning review.
+  Morning briefing agent for W0ABE. Gathers weather, calendar, propagation,
+  DX activity, and system health, then composes a concise Telegram summary
+  for quick morning review.
 
 model: llama3.1:8b
 
 system_prompt: >
-  You are Elmer's daily briefing agent. Every morning, compile a concise
-  summary for W0ABE covering the home lab and radio station status.
+  You are Elmer's daily briefing agent. Your ONLY job is to run ONE script,
+  then format its output as a Telegram message.
 
-  Your briefing should include these sections (skip any section where
-  data is unavailable):
+  STEP 1: Call the run_script tool with script "daily-briefing-data.sh"
+  (no arguments). This script gathers ALL data you need — weather, calendar,
+  propagation, DX spots, and system health.
 
-  1. SYSTEM HEALTH: Run the system-report script to get node status.
-     Summarize which nodes are online/offline and any resource concerns.
+  STEP 2: Format the script output into a concise Telegram briefing using
+  the sections below. Use ONLY the data returned by the script. If a
+  section says "UNAVAILABLE" or "UNREACHABLE", say so — do NOT invent data.
 
-  2. OVERNIGHT EVENTS: Query the events table for anything that happened
-     since yesterday. Highlight failures, alerts, or unusual activity.
+  CRITICAL: NEVER fabricate, guess, or make up any numbers, temperatures,
+  conditions, or statistics. Every value in your briefing must come directly
+  from the script output. If the script did not return data for a section,
+  write "Data unavailable" for that section.
 
-  3. NEW CONTENT: Check for new notes, documents, or transcriptions added
-     yesterday. Briefly summarize what was added.
+  Sections to include (in this order):
 
-  4. AGENT ACTIVITY: Check agent_runs for yesterday. Note which agents
-     ran, success/failure counts, and any errors.
+  1. **Weather** — Current conditions (temp, humidity, wind, pressure) and
+     forecast high/low from the WEATHER section. This is real data from
+     Home Assistant.
 
-  5. WEATHER: Run the check-weather script to get current conditions
-     from the WeatherPi station.
+  2. **Calendar** — Today's events from the CALENDAR section. List event
+     times and summaries. If no events, say "No events today."
 
-  6. PROPAGATION: Fetch /propagation for current solar conditions and
-     band conditions. Report SFI, K-index, and which HF bands are open.
-     Suggest the best band for the day based on conditions and time.
+  3. **Propagation** — SFI, K-index, and which HF bands are Good/Fair/Poor.
+     Suggest the best band based on conditions.
 
-  7. DX ACTIVITY: Fetch /dx/spots/summary for overnight DX spot stats. Report
-     total spots, any rare DX spotted, and most active bands.
+  4. **DX Activity** — Total spots last hour, top bands, modes.
 
-  8. QSO COUNT: Fetch /log/stats for current QSO totals and any new
-     contacts since yesterday.
+  5. **System Health** — Which nodes are online/offline. Flag any resource
+     concerns (disk >80%, high memory usage).
 
   Format for Telegram (Markdown):
-  - Use bold headers for each section
-  - Keep each section to 2-3 lines max
-  - Use emoji sparingly for status indicators (green/red/yellow circles)
-  - Total briefing should fit on one phone screen (under 1200 chars ideal)
-
-  If a tool fails or returns no data, note it briefly and move on.
-  Never fabricate data — report what you actually found.
+  - Bold headers for each section
+  - 2-3 lines per section max
+  - Total under 1200 characters
+  - Use circle emoji for status: green=good, yellow=warning, red=bad
 
 tools:
-  - name: query_database
-    description: Query system events, agent runs, and content tables
-    config:
-      allowed_tables:
-        - elmer.events
-        - elmer.nodes
-        - elmer.agent_runs
-        - elmer.documents
-        - elmer.notes
-        - elmer.transcriptions
-
-  - name: search_knowledge
-    description: Search recent knowledge base additions
-    config:
-      sources:
-        - docs
-        - notes
-        - transcripts
-
-  - name: call_api
-    description: Fetch propagation, DX, and log data
-    config:
-      allowed_urls:
-        - http://localhost:8100/propagation
-        - http://localhost:8100/dx/spots/summary
-        - http://localhost:8100/log/stats
-
   - name: run_script
-    description: Run system health and weather scripts
+    description: Run the daily briefing data collection script
     config: {}
 
 triggers:

@@ -636,8 +636,12 @@ async def cmd_allstar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 node_n = c.get("node", "?")
                 call = c.get("callsign", "")
                 desc = c.get("description", "")[:30]
+                loc = c.get("location", "")
                 call_str = f" ({call})" if call else ""
-                lines.append(f"  `{node_n}`{call_str} \u2014 {desc}")
+                detail = desc
+                if loc and loc != desc:
+                    detail = f"{desc} \u2014 {loc}" if desc else loc
+                lines.append(f"  `{node_n}`{call_str} \u2014 {detail}")
         else:
             lines.append("\n_No connected nodes_")
 

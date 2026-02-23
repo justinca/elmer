@@ -50,11 +50,8 @@ function AgentRuns() {
 
   const { data: agentNames = [] } = useQuery({
     queryKey: queryKeys.agents.list(),
-    queryFn: () =>
-      getAgents().then((r) => {
-        const agents = r.data || []
-        return (agents.map((a: { name: string }) => a.name) as string[]).sort()
-      }),
+    queryFn: () => getAgents().then((r) => (r.data || []) as Array<{ name: string }>),
+    select: (data) => (Array.isArray(data) ? data.map((a: { name: string }) => a.name).sort() : []) as string[],
     staleTime: STALE_TIMES.agents,
     refetchInterval: 60_000,
   })
@@ -193,7 +190,7 @@ function AgentRuns() {
                   <div className="flex h-3 flex-1 overflow-hidden rounded-full bg-muted">
                     {distribution.completed > 0 && (
                       <div
-                        className="bg-emerald-500 transition-all"
+                        className="bg-blue-500 transition-all"
                         style={{ width: `${distribution.completed}%` }}
                       />
                     )}
@@ -225,7 +222,7 @@ function AgentRuns() {
                 </div>
                 <div className="flex flex-wrap gap-3 mt-2">
                   <span className="flex items-center gap-1 text-xs">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" /> Completed
+                    <span className="h-2 w-2 rounded-full bg-blue-500" /> Completed
                   </span>
                   <span className="flex items-center gap-1 text-xs">
                     <span className="h-2 w-2 rounded-full bg-red-500" /> Failed

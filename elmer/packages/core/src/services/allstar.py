@@ -468,10 +468,18 @@ class AllStarService:
                         continue
                     seen.add(node_num)
                     server = item.get("server") or {}
+                    # Build a useful description from available fields.
+                    # node_frequency often has the best label (e.g. "NW AllStar Group").
+                    desc = (
+                        str(item.get("node_frequency", "") or "").strip()
+                        or server.get("SiteName", "")
+                        or server.get("Location", "")
+                        or server.get("Server_Name", "")
+                    )
                     connected.append(LinkedNode(
                         node=node_num,
                         callsign=item.get("callsign", ""),
-                        description=server.get("SiteName", "") or server.get("Server_Name", ""),
+                        description=desc,
                         location=server.get("Location", ""),
                     ))
 

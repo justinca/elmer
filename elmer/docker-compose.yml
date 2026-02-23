@@ -43,6 +43,9 @@ services:
       - ./packages/agents/agent_definitions:/app/agent_definitions:ro
       - ./scripts/agent-scripts:/app/agent-scripts:ro
       - /home/justin/.ssh:/root/.ssh:ro
+    extra_hosts:
+      - "shackpi:192.168.1.65"
+      - "weatherpi:192.168.1.177"
     restart: unless-stopped
     healthcheck:
       test:

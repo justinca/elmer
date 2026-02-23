@@ -203,7 +203,7 @@ function Contests() {
                     <BarChart data={bandChartData} layout="vertical">
                       <XAxis type="number" tick={{ fontSize: 10 }} />
                       <YAxis type="category" dataKey="band" tick={{ fontSize: 11 }} width={40} />
-                      <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="count" fill="#2563EB" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}

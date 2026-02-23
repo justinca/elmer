@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { StatusDot } from "./StatusDot"
 import { NotificationBell } from "./NotificationBell"
+import { ElmerIcon } from "./ElmerIcon"
 import { useConnectionStatus } from "@/hooks/useConnectionStatus"
 import { useState } from "react"
 
@@ -24,20 +25,21 @@ export function MobileSidebar() {
           <Menu className="h-5 w-5" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-64 p-0">
+      <SheetContent side="left" className="w-64 p-0 sidebar-gradient">
         <div className="flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-2">
+            <ElmerIcon size={22} />
             <span className="text-lg font-bold text-primary">Elmer</span>
             <StatusDot status={connected ? "healthy" : "down"} size="sm" />
           </div>
           <NotificationBell />
         </div>
         <Separator />
-        <ScrollArea className="flex-1 py-2">
+        <ScrollArea className="min-h-0 flex-1 overflow-hidden py-2">
           <nav className="space-y-4 px-3">
             {navigation.map((group) => (
               <div key={group.label}>
-                <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-blue-500/80">
                   {group.label}
                 </p>
                 <div className="space-y-0.5">
@@ -48,10 +50,10 @@ export function MobileSidebar() {
                       onClick={() => setOpen(false)}
                       className={({ isActive }) =>
                         cn(
-                          "flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
+                          "flex items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-all duration-150",
                           "hover:bg-accent hover:text-accent-foreground",
                           isActive
-                            ? "bg-accent text-accent-foreground"
+                            ? "bg-primary/10 text-primary nav-active-indicator"
                             : "text-foreground/70",
                         )
                       }

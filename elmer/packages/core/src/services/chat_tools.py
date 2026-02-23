@@ -119,7 +119,7 @@ CHAT_TOOLS: list[dict[str, Any]] = [
             "name": "allstar_find_active",
             "description": (
                 "Get the list of currently active/keyed (transmitting) AllStar nodes "
-                "across the network. Use this to find a live node to connect to."
+                "across the network. Returns the list but does NOT connect."
             ),
             "parameters": {
                 "type": "object",
@@ -144,6 +144,49 @@ CHAT_TOOLS: list[dict[str, Any]] = [
                     "query": {
                         "type": "string",
                         "description": "Search term (location, callsign, site name, or affiliation).",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "allstar_connect_active",
+            "description": (
+                "Find a currently transmitting AllStar node and connect to it. "
+                "Picks a random active node and connects in one step. "
+                "Use this when the user says 'connect me to an active node' or "
+                "'find an active node and connect'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "allstar_search_and_connect",
+            "description": (
+                "Search for an AllStar node by location or description and connect "
+                "to the best match. Use this when the user says something like "
+                "'connect to the estes park pole hill node'. Pass the broad location "
+                "as query and the specific detail as filter."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Broad search term (e.g. 'estes park').",
+                    },
+                    "filter": {
+                        "type": "string",
+                        "description": "Optional specific detail to match in results (e.g. 'pole hill').",
                     },
                 },
                 "required": ["query"],
@@ -211,6 +254,50 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> str:
                 "results": [asdict(r) for r in results],
                 "count": len(results),
                 "query": query,
+            })
+
+        elif name == "allstar_connect_active":
+            import random
+            nodes = await svc.get_keyed_nodes()
+            if not nodes:
+                return json.dumps({"error": "No active/keyed nodes found."})
+            chosen = random.choice(nodes)
+            node_num = chosen["node"]
+            result = await svc.connect_node(node_num)
+            return json.dumps({
+                "chosen_node": chosen,
+                "connect_result": result,
+            })
+
+        elif name == "allstar_search_and_connect":
+            query = str(arguments.get("query", ""))
+            filt = str(arguments.get("filter", "")).lower()
+            # Try full query first; if no results, try dropping words
+            # from the end (e.g. "estes park pole hill" -> "estes park pole" -> "estes park")
+            results = await svc.search_nodes(query)
+            words = query.split()
+            while not results and len(words) > 1:
+                words = words[:-1]
+                results = await svc.search_nodes(" ".join(words))
+            if not results:
+                return json.dumps({"error": f"No nodes found for '{query}'."})
+            # Use remaining original words as filter terms
+            used_query = " ".join(words)
+            leftover = query[len(used_query):].strip().lower()
+            filter_term = filt or leftover
+            # Pick best match based on filter
+            best = results[0]
+            if filter_term:
+                for r in results:
+                    combined = f"{r.location} {r.site} {r.affiliation} {r.callsign}".lower()
+                    if filter_term in combined:
+                        best = r
+                        break
+            result = await svc.connect_node(best.node)
+            return json.dumps({
+                "matched_node": asdict(best),
+                "connect_result": result,
+                "total_matches": len(results),
             })
 
         else:

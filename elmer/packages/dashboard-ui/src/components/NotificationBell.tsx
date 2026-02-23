@@ -65,7 +65,7 @@ export function NotificationBell() {
           <Bell className="h-4 w-4" />
           {unread > 0 && (
             <Badge
-              className="absolute -right-1 -top-1 h-4 min-w-4 px-1 text-[10px] leading-none"
+              className="absolute -right-1 -top-1 h-4 min-w-4 px-1 text-[10px] leading-none bg-blue-500 text-white border-0"
             >
               {unread}
             </Badge>

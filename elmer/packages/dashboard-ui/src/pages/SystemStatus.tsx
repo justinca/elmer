@@ -94,11 +94,8 @@ export default function SystemStatus() {
 
   const { data: knowledgeSources = 0 } = useQuery({
     queryKey: queryKeys.knowledge.sources(),
-    queryFn: () =>
-      getKnowledgeSources().then((r) => {
-        const sources = r.data
-        return Array.isArray(sources) ? sources.length : 0
-      }),
+    queryFn: () => getKnowledgeSources().then((r) => (Array.isArray(r.data) ? r.data : [])),
+    select: (data) => (Array.isArray(data) ? data.length : 0),
     staleTime: STALE_TIMES.knowledge,
     refetchInterval: 60_000,
   })
@@ -213,13 +210,13 @@ export default function SystemStatus() {
                 <YAxis className="text-xs" tick={{ fill: "currentColor" }} label={{ value: "min", angle: -90, position: "insideLeft" }} />
                 <RechartsTooltip
                   contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
+                    backgroundColor: "var(--card)",
+                    border: "1px solid var(--border)",
                     borderRadius: "0.5rem",
-                    color: "hsl(var(--card-foreground))",
+                    color: "var(--card-foreground)",
                   }}
                 />
-                <Line type="monotone" dataKey="uptime" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="uptime" stroke="#2563EB" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>

@@ -48,7 +48,7 @@ const triggerIcons: Record<string, { icon: typeof Clock; label: string }> = {
 }
 
 const statusConfig: Record<string, { color: string; icon: typeof CheckCircle2 }> = {
-  completed: { color: "text-emerald-500", icon: CheckCircle2 },
+  completed: { color: "text-blue-500", icon: CheckCircle2 },
   failed: { color: "text-destructive", icon: XCircle },
   timeout: { color: "text-amber-500", icon: AlertTriangle },
   running: { color: "text-blue-500", icon: Timer },

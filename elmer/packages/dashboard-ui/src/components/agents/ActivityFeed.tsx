@@ -21,7 +21,7 @@ interface ActivityFeedProps {
 }
 
 const statusIcon: Record<string, { icon: typeof CheckCircle2; color: string; label: string }> = {
-  completed: { icon: CheckCircle2, color: "text-emerald-500", label: "completed" },
+  completed: { icon: CheckCircle2, color: "text-blue-500", label: "completed" },
   failed: { icon: XCircle, color: "text-destructive", label: "failed" },
   running: { icon: Loader2, color: "text-blue-500", label: "running" },
   timeout: { icon: AlertTriangle, color: "text-amber-500", label: "timeout" },

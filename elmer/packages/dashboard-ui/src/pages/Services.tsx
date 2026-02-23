@@ -69,7 +69,12 @@ export default function Services() {
   })
 
   const devices: DeviceInfo[] = inventoryData?.devices || inventoryData || []
-  const services: ServiceInfo[] = catalogData?.services || catalogData || []
+  const allServices: ServiceInfo[] = catalogData?.services || catalogData || []
+  // Filter out deprecated Streamlit dashboard
+  const services = useMemo(
+    () => allServices.filter((s) => s.container !== "elmer-dashboard"),
+    [allServices],
+  )
   const loading = invLoading || catLoading
 
   const grouped = useMemo(() => {

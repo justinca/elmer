@@ -60,15 +60,14 @@ interface DxccEntry {
   [key: string]: unknown
 }
 
-const PIE_COLORS = [
-  "hsl(var(--primary))",
-  "hsl(142 71% 45%)",
-  "hsl(48 96% 53%)",
-  "hsl(0 84% 60%)",
-  "hsl(217 91% 60%)",
-  "hsl(280 65% 60%)",
-  "hsl(25 95% 53%)",
-  "hsl(173 80% 40%)",
+const CHART_COLORS = [
+  "#2563EB", // signal blue
+  "#0EA5E9", // elmer teal
+  "#F59E0B", // rf amber
+  "#10B981", // tx green
+  "#EF4444", // qrm red
+  "#EAB308", // standby yellow
+  "#94A3B8", // slate
 ]
 
 function LogAnalysis() {
@@ -220,13 +219,13 @@ function LogAnalysis() {
                   <YAxis tick={{ fontSize: 10 }} />
                   <RTooltip
                     contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
+                      backgroundColor: "var(--card)",
+                      border: "1px solid var(--border)",
                       borderRadius: "8px",
                       fontSize: "12px",
                     }}
                   />
-                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" fill="#2563EB" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -255,13 +254,13 @@ function LogAnalysis() {
                     fontSize={10}
                   >
                     {bandData.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                     ))}
                   </Pie>
                   <RTooltip
                     contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
+                      backgroundColor: "var(--card)",
+                      border: "1px solid var(--border)",
                       borderRadius: "8px",
                       fontSize: "12px",
                     }}
@@ -294,13 +293,13 @@ function LogAnalysis() {
                     fontSize={10}
                   >
                     {modeData.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                     ))}
                   </Pie>
                   <RTooltip
                     contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
+                      backgroundColor: "var(--card)",
+                      border: "1px solid var(--border)",
                       borderRadius: "8px",
                       fontSize: "12px",
                     }}

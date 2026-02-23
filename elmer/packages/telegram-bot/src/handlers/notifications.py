@@ -79,8 +79,9 @@ class NotificationManager:
             client_id="elmer-telegram",
         )
 
-        # Subscribe to heartbeats, events, and knowledge topics.
+        # Subscribe to heartbeats, status (LWT), events, and knowledge topics.
         self._mqtt.subscribe("elmer/+/heartbeat", self._on_heartbeat)
+        self._mqtt.subscribe("elmer/+/status", self._on_node_status)
         self._mqtt.subscribe("elmer/events/#", self._on_event)
         self._mqtt.subscribe("elmer/transcription/result", self._on_transcription)
         self._mqtt.subscribe("elmer/knowledge/sync", self._on_knowledge_sync)
@@ -123,12 +124,71 @@ class NotificationManager:
             )
 
         elif old_status in ("offline", "unreachable") and new_status == "online":
+            # Distinguish real system reboot from monitor service restart.
+            # If system_uptime_seconds is high, the OS never rebooted — only
+            # the monitor process restarted (e.g. systemd MemoryMax, crash).
+            details = payload.get("details", {})
+            system_uptime = details.get("system_uptime_seconds", 0)
+
+            if system_uptime < 300:
+                await self._queue_alert(
+                    f"\u2705 *{node_id}* is back online (rebooted)"
+                )
+            else:
+                logger.info(
+                    "Node '%s' monitor service restarted (system uptime %ds) "
+                    "— suppressing back-online alert",
+                    node_id, system_uptime,
+                )
+
+    async def _on_node_status(self, topic: str, payload) -> None:
+        """Track node status from MQTT LWT / retained status messages.
+
+        Only acts on *offline* transitions (LWT fired on ungraceful death).
+        Recovery (online) is deliberately left to ``_on_heartbeat`` which
+        has system-uptime-based suppression to avoid false "back online"
+        alerts when only the monitor service restarted.
+        """
+        parts = topic.split("/")
+        if len(parts) < 3:
+            return
+        node_id = parts[1]
+
+        # Payload is a JSON-parsed string like "online" or "offline".
+        new_status = payload if isinstance(payload, str) else str(payload)
+        old_status = self._node_status.get(node_id)
+
+        if old_status is None:
+            # First time seeing this node — just record, don't alert.
+            self._node_status[node_id] = new_status
+            return
+
+        if new_status == "offline" and old_status != "offline":
+            self._node_status[node_id] = "offline"
             await self._queue_alert(
-                f"\u2705 *{node_id}* is back online"
+                f"\u274c *{node_id}* went offline"
             )
 
     async def _on_event(self, topic: str, payload: dict) -> None:
-        """Handle events — alert on severity=alert."""
+        """Handle events — alert on severity=alert or node_unreachable."""
+        event_type = payload.get("event_type", "")
+
+        # Core's stale-node checker detected missed heartbeats.
+        # Covers the case where even the LWT didn't fire.
+        if event_type == "node_unreachable":
+            data = payload.get("data", {})
+            node_id = data.get("node")
+            if node_id:
+                old_status = self._node_status.get(node_id)
+                # Always update tracking so _on_heartbeat detects recovery.
+                self._node_status[node_id] = "unreachable"
+                # Only alert if not already known offline/unreachable.
+                if old_status not in (None, "offline", "unreachable"):
+                    await self._queue_alert(
+                        f"\u274c *{node_id}* unreachable (missed heartbeats)"
+                    )
+            return
+
         data = payload.get("data", {})
         severity = data.get("severity", "").lower()
         if severity != "alert":

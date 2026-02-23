@@ -27,23 +27,34 @@ context.
 Be concise, technical when appropriate, and helpful. You understand \
 amateur radio, home automation, networking, Linux, and Docker.
 
-You can control the AllStar node (W0ABE, node 68498) using the \
-provided tools. When users ask about AllStar status, connections, \
-or want to connect/disconnect/monitor nodes, use the appropriate \
-tool. For "disconnect all", use allstar_disconnect_all. \
-When connecting to an unfamiliar node, you may use allstar_lookup \
-first to check its details. Always confirm what you did after \
-executing an action.
+IMPORTANT: You have AllStar tools. You MUST call them to perform \
+actions. NEVER generate fake tool output or pretend a tool ran.
 
-To find an active node to connect to, use allstar_find_active to \
-get currently transmitting nodes, pick one at random, and connect.
+Tools for AllStar node 68498 (W0ABE):
+- allstar_status: get node status and connections
+- allstar_connect: connect to a specific node number
+- allstar_disconnect: disconnect from a specific node
+- allstar_disconnect_all: disconnect from all nodes
+- allstar_monitor: monitor a node (listen-only)
+- allstar_lookup: look up a node in the directory
+- allstar_find_active: list currently transmitting nodes
+- allstar_search_nodes: search nodes by location/callsign
+- allstar_connect_active: find an active node AND connect (one step)
+- allstar_search_and_connect: search for a node AND connect (one step)
 
-To find a node by location or description (e.g. "connect to the \
-estes park pole hill node"), use allstar_search_nodes with the \
-broadest location term (e.g. "estes park"), then examine the \
-results to find the best match for any specific detail (e.g. \
-"pole hill" in the site name). Do NOT combine all keywords into \
-one search — search broad first, then filter the results.\
+IMPORTANT tool selection:
+- "connect to an active node" → call allstar_connect_active
+- "connect to estes park pole hill" → call allstar_search_and_connect \
+with query="estes park" and filter="pole hill"
+- "what nodes are transmitting" → call allstar_find_active
+- "connect to node 2000" → call allstar_connect with node=2000
+- "disconnect all" → call allstar_disconnect_all
+
+If the user asks what you can do, what tools you have, or about your \
+capabilities — answer in plain English. List your AllStar abilities \
+in a friendly way. Do NOT call any tools for capability questions.
+
+Always report what the tool returned. Do not make up results.\
 """
 
 EMBED_TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=10.0, pool=10.0)
@@ -437,6 +448,32 @@ def _format_web_results(
 _MAX_TOOL_ROUNDS = 5
 
 
+def _extract_text_tool_call(content: str) -> dict[str, Any] | None:
+    """Detect a tool call emitted as plain text by small models.
+
+    Looks for JSON like ``{"name": "tool_name", "parameters": {...}}``
+    embedded in the content and converts it to the Ollama tool_call format.
+    Returns ``None`` if the content doesn't look like a tool call.
+    """
+    import re
+
+    # Find the first JSON object in the content.
+    match = re.search(r'\{[^{}]*"name"\s*:\s*"[^"]+?"[^{}]*"parameters"\s*:\s*\{[^}]*\}[^}]*\}', content)
+    if not match:
+        return None
+    try:
+        obj = json.loads(match.group())
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+    name = obj.get("name", "")
+    params = obj.get("parameters", {})
+    if not name:
+        return None
+
+    return {"function": {"name": name, "arguments": params}}
+
+
 async def _call_ollama(
     model: str,
     messages: list[dict[str, Any]],
@@ -453,14 +490,25 @@ async def _call_ollama(
         }
         if tools:
             payload["tools"] = tools
+            # temperature=0 makes tool calling much more reliable with small models
+            payload["options"] = {"temperature": 0}
 
         data = await _ollama_request(payload)
 
         msg = data.get("message", {})
         tool_calls = msg.get("tool_calls")
 
+        # Small models sometimes emit tool calls as plain text instead of
+        # structured tool_calls.  Detect and recover.
         if not tool_calls:
-            return msg.get("content", "")
+            content = msg.get("content", "")
+            parsed_tc = _extract_text_tool_call(content)
+            if parsed_tc is not None:
+                tool_calls = [parsed_tc]
+                msg["tool_calls"] = tool_calls
+                logger.info("Recovered text-format tool call from content")
+            else:
+                return content
 
         # Append the assistant message (with tool_calls) to history.
         messages.append(msg)

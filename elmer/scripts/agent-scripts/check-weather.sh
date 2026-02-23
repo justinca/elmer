@@ -4,14 +4,14 @@
 # Returns current conditions and recent observations
 
 HOST="${1:-weatherpi}"
-SSH_OPTS="-o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no"
+SSH_OPTS="-F /dev/null -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
 
 echo "=== weewx Service Status ==="
-ssh $SSH_OPTS "$HOST" "systemctl is-active weewx 2>/dev/null && echo 'weewx: running' || echo 'weewx: not running'"
+ssh $SSH_OPTS "justin@$HOST" "systemctl is-active weewx 2>/dev/null && echo 'weewx: running' || echo 'weewx: not running'"
 
 echo ""
 echo "=== Recent Observations (last 5) ==="
-ssh $SSH_OPTS "$HOST" "sqlite3 -header -column /var/lib/weewx/weewx.sdb \
+ssh $SSH_OPTS "justin@$HOST" "sqlite3 -header -column /var/lib/weewx/weewx.sdb \
   'SELECT datetime(dateTime, \"unixepoch\", \"localtime\") AS time, \
    printf(\"%.1f\", outTemp) AS temp_F, \
    printf(\"%.0f\", outHumidity) AS humidity, \
@@ -22,4 +22,4 @@ ssh $SSH_OPTS "$HOST" "sqlite3 -header -column /var/lib/weewx/weewx.sdb \
 
 echo ""
 echo "=== WeatherPi System ==="
-ssh $SSH_OPTS "$HOST" "uptime; free -h | grep Mem" 2>/dev/null || echo "UNREACHABLE"
+ssh $SSH_OPTS "justin@$HOST" "uptime; free -h | grep Mem" 2>/dev/null || echo "UNREACHABLE"

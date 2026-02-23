@@ -197,7 +197,7 @@ function DXSpots() {
         actions={
           <div className="flex items-center gap-3">
             {cluster && (
-              <Badge variant="outline" className={cn("text-xs", cluster.connected ? "text-emerald-500" : "text-destructive")}>
+              <Badge variant="outline" className={cn("text-xs", cluster.connected ? "text-blue-500" : "text-destructive")}>
                 {cluster.connected ? <Wifi className="mr-1 h-3 w-3" /> : <WifiOff className="mr-1 h-3 w-3" />}
                 {cluster.connected ? "Connected" : "Disconnected"}
               </Badge>
@@ -314,13 +314,13 @@ function DXSpots() {
                     <YAxis type="category" dataKey="band" tick={{ fontSize: 11 }} width={40} />
                     <RTooltip
                       contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
+                        backgroundColor: "var(--card)",
+                        border: "1px solid var(--border)",
                         borderRadius: "8px",
                         fontSize: "12px",
                       }}
                     />
-                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="count" fill="#2563EB" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>

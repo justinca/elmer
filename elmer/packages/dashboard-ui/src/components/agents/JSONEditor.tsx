@@ -54,8 +54,8 @@ export function JSONEditor({ value, onChange, label, rows = 4, className }: JSON
             </>
           ) : (
             <>
-              <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-              <span className="text-xs text-emerald-500">Valid JSON</span>
+              <CheckCircle2 className="h-3 w-3 text-blue-500" />
+              <span className="text-xs text-blue-500">Valid JSON</span>
             </>
           )}
         </div>
