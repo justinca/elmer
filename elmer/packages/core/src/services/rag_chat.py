@@ -504,27 +504,50 @@ _MAX_TOOL_ROUNDS = 5
 def _extract_text_tool_call(content: str) -> dict[str, Any] | None:
     """Detect a tool call emitted as plain text by small models.
 
-    Looks for JSON like ``{"name": "tool_name", "parameters": {...}}``
-    embedded in the content and converts it to the Ollama tool_call format.
+    Handles multiple formats the model may produce:
+      {"name": "tool", "parameters": {...}}
+      {"name": "tool", "args": {...}}
+      {"name": "tool", "arguments": {...}}
     Returns ``None`` if the content doesn't look like a tool call.
     """
-    import re
+    # Find all top-level JSON objects by matching balanced braces.
+    candidates: list[str] = []
+    depth = 0
+    start = -1
+    for i, ch in enumerate(content):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start >= 0:
+                candidates.append(content[start : i + 1])
+                start = -1
 
-    # Find the first JSON object in the content.
-    match = re.search(r'\{[^{}]*"name"\s*:\s*"[^"]+?"[^{}]*"parameters"\s*:\s*\{[^}]*\}[^}]*\}', content)
-    if not match:
-        return None
-    try:
-        obj = json.loads(match.group())
-    except (json.JSONDecodeError, ValueError):
-        return None
+    for raw in candidates:
+        try:
+            obj = json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            continue
 
-    name = obj.get("name", "")
-    params = obj.get("parameters", {})
-    if not name:
-        return None
+        if not isinstance(obj, dict):
+            continue
 
-    return {"function": {"name": name, "arguments": params}}
+        name = obj.get("name", "")
+        if not name:
+            continue
+
+        # Accept "parameters", "args", or "arguments" as the params key.
+        params = (
+            obj.get("parameters")
+            or obj.get("arguments")
+            or obj.get("args")
+            or {}
+        )
+        return {"function": {"name": name, "arguments": params}}
+
+    return None
 
 
 async def _call_ollama(
