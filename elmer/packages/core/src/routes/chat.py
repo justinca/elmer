@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..services import conversation as convo
@@ -111,6 +112,30 @@ async def send_message(request: ChatRequest):
         web_search_performed=result.web_search_performed,
         web_search_query=result.web_search_query,
         web_sources=[WebSource(**ws) for ws in result.web_sources],
+    )
+
+
+@router.post("/stream")
+async def stream_message(request: ChatRequest):
+    """Send a message to Elmer and get a streaming SSE response."""
+    if not request.message.strip():
+        raise HTTPException(status_code=400, detail="Message is empty")
+
+    if request.web_search not in ("auto", "force", "off"):
+        raise HTTPException(status_code=400, detail="web_search must be 'auto', 'force', or 'off'")
+
+    return StreamingResponse(
+        rag_chat.chat_stream(
+            message=request.message,
+            conversation_id=request.conversation_id,
+            model=request.model,
+            web_search=request.web_search,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache",
+        },
     )
 
 

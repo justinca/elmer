@@ -1,7 +1,8 @@
 """Chat tool definitions for Ollama tool-calling.
 
-Exposes AllStar, Log4OM, propagation, DX cluster, POTA, contests,
-system health, and agent operations as tools the chat LLM can invoke.
+Exposes 8 grouped dispatcher tools (allstar, log, propagation, dx, pota,
+contest, system, agent) instead of 35 individual tools, reducing the
+cognitive load on the small LLM.
 """
 
 import json
@@ -50,730 +51,333 @@ async def _core_proxy(
 
 
 # ---------------------------------------------------------------------------
-# Tool definitions (Ollama tool-calling format)
+# Tool definitions — 8 grouped dispatchers (Ollama tool-calling format)
 # ---------------------------------------------------------------------------
 
 CHAT_TOOLS: list[dict[str, Any]] = [
     # ==================================================================
-    # AllStar tools
+    # AllStar
     # ==================================================================
     {
         "type": "function",
         "function": {
-            "name": "allstar_status",
+            "name": "allstar",
             "description": (
-                "Get the current AllStar node status including online/offline state, "
-                "uptime, TX stats, and list of connected nodes."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "allstar_connect",
-            "description": "Connect to a remote AllStar node in transceive (two-way) mode.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "node": {
-                        "type": "integer",
-                        "description": "The remote AllStar node number to connect to.",
-                    },
-                },
-                "required": ["node"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "allstar_disconnect",
-            "description": "Disconnect from a remote AllStar node.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "node": {
-                        "type": "integer",
-                        "description": "The remote AllStar node number to disconnect from.",
-                    },
-                },
-                "required": ["node"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "allstar_disconnect_all",
-            "description": (
-                "Disconnect from ALL currently connected AllStar nodes. "
-                "First fetches the connection list, then disconnects each one."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "allstar_monitor",
-            "description": "Connect to a remote AllStar node in monitor (listen-only) mode.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "node": {
-                        "type": "integer",
-                        "description": "The remote AllStar node number to monitor.",
-                    },
-                },
-                "required": ["node"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "allstar_lookup",
-            "description": "Look up an AllStar node in the directory to find its callsign, description, and location.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "node": {
-                        "type": "integer",
-                        "description": "The AllStar node number to look up.",
-                    },
-                },
-                "required": ["node"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "allstar_find_active",
-            "description": (
-                "Get the list of currently active/keyed (transmitting) AllStar nodes "
-                "across the network. Returns the list but does NOT connect."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "allstar_search_nodes",
-            "description": (
-                "Search the AllStar node directory by location, callsign, site name, "
-                "or affiliation. Returns matching nodes with full details. Use a broad "
-                "search term (e.g. 'estes park' not 'estes park pole hill') and then "
-                "examine the results to find the best match."
+                "Control and query the AllStar amateur radio linking system. "
+                "Actions: status (get node status/connections), connect (connect to a node), "
+                "disconnect (disconnect a node), disconnect_all (disconnect all nodes), "
+                "monitor (listen-only to a node), lookup (directory lookup by node number), "
+                "find_active (list currently transmitting nodes), search_nodes (search directory), "
+                "connect_active (connect to a random active node), "
+                "search_and_connect (search and connect to best match)."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "status", "connect", "disconnect", "disconnect_all",
+                            "monitor", "lookup", "find_active", "search_nodes",
+                            "connect_active", "search_and_connect",
+                        ],
+                        "description": "The action to perform.",
+                    },
+                    "node": {
+                        "type": "integer",
+                        "description": "Node number (for connect, disconnect, monitor, lookup).",
+                    },
                     "query": {
                         "type": "string",
-                        "description": "Search term (location, callsign, site name, or affiliation).",
-                    },
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "allstar_connect_active",
-            "description": (
-                "Find a currently transmitting AllStar node and connect to it. "
-                "Picks a random active node and connects in one step. "
-                "Use this when the user says 'connect me to an active node' or "
-                "'find an active node and connect'."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "allstar_search_and_connect",
-            "description": (
-                "Search for an AllStar node by location or description and connect "
-                "to the best match. Use this when the user says something like "
-                "'connect to the estes park pole hill node'. Pass the broad location "
-                "as query and the specific detail as filter."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Broad search term (e.g. 'estes park').",
+                        "description": "Search term (for search_nodes, search_and_connect).",
                     },
                     "filter": {
                         "type": "string",
-                        "description": "Optional specific detail to match in results (e.g. 'pole hill').",
+                        "description": "Specific detail to match in search results (for search_and_connect).",
                     },
                 },
-                "required": ["query"],
+                "required": ["action"],
             },
         },
     },
     # ==================================================================
-    # Log / QSO tools
+    # Log / QSO
     # ==================================================================
     {
         "type": "function",
         "function": {
-            "name": "log_recent_qsos",
+            "name": "log",
             "description": (
-                "Get the most recent QSOs from the Log4OM logbook. "
-                "Use this when the user asks about recent contacts, today's QSOs, "
-                "or wants a summary of recent activity."
+                "Query the ham radio logbook (Log4OM). "
+                "Actions: recent_qsos (get recent contacts), search_qsos (search with filters), "
+                "stats (aggregate statistics), dxcc (DXCC entity progress)."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["recent_qsos", "search_qsos", "stats", "dxcc"],
+                        "description": "The action to perform.",
+                    },
                     "limit": {
                         "type": "integer",
-                        "description": "Number of recent QSOs to return (default 20, max 100).",
+                        "description": "Max results to return.",
                     },
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "log_search_qsos",
-            "description": (
-                "Search QSOs with filters. Use this to find contacts by callsign, "
-                "band, mode, country, or date range. For 'today' use since=today's "
-                "date in YYYY-MM-DD format."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
                     "call": {
                         "type": "string",
-                        "description": "Filter by callsign (partial match).",
+                        "description": "Filter by callsign (for search_qsos).",
                     },
                     "band": {
                         "type": "string",
-                        "description": "Filter by band (e.g. '20m', '40m').",
+                        "description": "Filter by band e.g. '20m' (for search_qsos).",
                     },
                     "mode": {
                         "type": "string",
-                        "description": "Filter by mode (e.g. 'FT8', 'SSB', 'CW').",
+                        "description": "Filter by mode e.g. 'FT8' (for search_qsos).",
                     },
                     "country": {
                         "type": "string",
-                        "description": "Filter by DXCC country name.",
+                        "description": "Filter by DXCC country (for search_qsos).",
                     },
                     "since": {
                         "type": "string",
-                        "description": "Start date in YYYY-MM-DD format.",
+                        "description": "Start date YYYY-MM-DD (for search_qsos).",
                     },
                     "until": {
                         "type": "string",
-                        "description": "End date in YYYY-MM-DD format.",
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Max results (default 50, max 500).",
+                        "description": "End date YYYY-MM-DD (for search_qsos).",
                     },
                 },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "log_stats",
-            "description": (
-                "Get aggregate log statistics: total QSOs, breakdown by band, "
-                "mode, top DXCC entities worked. Use for overall log summaries."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "log_dxcc",
-            "description": (
-                "Get DXCC entity summary — which countries/entities have been worked "
-                "and confirmed. Use when user asks about DXCC progress or countries worked."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
+                "required": ["action"],
             },
         },
     },
     # ==================================================================
-    # Propagation tools
+    # Propagation
     # ==================================================================
     {
         "type": "function",
         "function": {
-            "name": "propagation_conditions",
+            "name": "propagation",
             "description": (
-                "Get current HF propagation conditions including solar flux index (SFI), "
-                "sunspot number, A/K indices, X-ray flux, geomagnetic field status, "
-                "and band-by-band conditions (day/night). Use for any question about "
-                "propagation, solar conditions, or which bands are open."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "propagation_band_detail",
-            "description": (
-                "Get detailed propagation info for a specific HF band including "
-                "current condition, signal-to-noise ratio, and recent history. "
-                "Band names: '80m-40m', '30m-20m', '17m-15m', '12m-10m'."
+                "Get HF radio propagation data. "
+                "Actions: conditions (current solar/band conditions), "
+                "band_detail (detailed info for one band), forecast (predicted conditions)."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["conditions", "band_detail", "forecast"],
+                        "description": "The action to perform.",
+                    },
                     "band": {
                         "type": "string",
-                        "description": "Band name (e.g. '20m', '40m', '80m-40m', '12m-10m').",
+                        "description": "Band name for band_detail (e.g. '20m', '80m-40m').",
                     },
                 },
-                "required": ["band"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "propagation_forecast",
-            "description": (
-                "Get the HF propagation forecast including predicted conditions "
-                "for the coming hours/days."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
+                "required": ["action"],
             },
         },
     },
     # ==================================================================
-    # DX Cluster tools
+    # DX Cluster
     # ==================================================================
     {
         "type": "function",
         "function": {
-            "name": "dx_spots",
+            "name": "dx",
             "description": (
-                "Get recent DX spots from the DX cluster. Can filter by band, mode, "
-                "or DXCC entity. Use when user asks about DX spots, what's being "
-                "spotted, or activity on a band."
+                "DX cluster spots and DXCC needs management. "
+                "Actions: spots (recent DX spots, filterable), spots_summary (activity summary), "
+                "lookup_entity (DXCC lookup by callsign), get_needs (view needs list), "
+                "add_need (add entity/band/mode need), remove_need (remove a need by ID)."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "spots", "spots_summary", "lookup_entity",
+                            "get_needs", "add_need", "remove_need",
+                        ],
+                        "description": "The action to perform.",
+                    },
                     "band": {
                         "type": "string",
-                        "description": "Filter by band (e.g. '20m', '40m').",
+                        "description": "Filter by band (for spots, add_need).",
                     },
                     "mode": {
                         "type": "string",
-                        "description": "Filter by mode (e.g. 'FT8', 'CW', 'SSB').",
+                        "description": "Filter by mode (for spots, add_need).",
                     },
                     "entity": {
                         "type": "string",
-                        "description": "Filter by DXCC entity name.",
+                        "description": "DXCC entity name (for lookup_entity, get_needs, add_need).",
                     },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Max spots to return (default 30, max 200).",
-                    },
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "dx_spots_summary",
-            "description": (
-                "Get a quick summary of DX cluster activity: total spots in the "
-                "last hour, breakdown by band and mode, and cluster connection status."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "dx_lookup_entity",
-            "description": (
-                "Look up the DXCC entity for a callsign. Returns entity name, "
-                "prefix, continent, CQ zone, and ITU zone."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
                     "callsign": {
                         "type": "string",
-                        "description": "The callsign to look up (e.g. 'JA1ABC', 'G4XYZ').",
-                    },
-                },
-                "required": ["callsign"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "dx_get_needs",
-            "description": (
-                "Get the DX needs list — entities/bands/modes still needed for "
-                "DXCC awards. Use when user asks what they still need to work."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "entity": {
-                        "type": "string",
-                        "description": "Optional: filter by specific DXCC entity name.",
-                    },
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "dx_add_need",
-            "description": (
-                "Add an entity/band/mode to the DX needs list. Use when the user "
-                "says 'I need Japan on 20m CW' or 'add VK to my needs'."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "entity": {
-                        "type": "string",
-                        "description": "DXCC entity name (e.g. 'Japan', 'Australia').",
-                    },
-                    "band": {
-                        "type": "string",
-                        "description": "Optional band (e.g. '20m').",
-                    },
-                    "mode": {
-                        "type": "string",
-                        "description": "Optional mode (e.g. 'CW', 'FT8').",
+                        "description": "Callsign to look up (for lookup_entity).",
                     },
                     "priority": {
                         "type": "integer",
-                        "description": "Priority 1-10, default 5. Higher = more important.",
+                        "description": "Priority 1-10 (for add_need, default 5).",
                     },
-                },
-                "required": ["entity"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "dx_remove_need",
-            "description": (
-                "Remove an entry from the DX needs list by its ID. "
-                "Get the ID from dx_get_needs first."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
                     "need_id": {
                         "type": "integer",
-                        "description": "The need ID to remove.",
+                        "description": "Need ID to remove (for remove_need).",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max spots to return (for spots).",
                     },
                 },
-                "required": ["need_id"],
+                "required": ["action"],
             },
         },
     },
     # ==================================================================
-    # POTA tools
+    # POTA
     # ==================================================================
     {
         "type": "function",
         "function": {
-            "name": "pota_spots",
+            "name": "pota",
             "description": (
-                "Get current Parks on the Air (POTA) activator spots — who is "
-                "currently activating a park and on what frequency."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "pota_search_parks",
-            "description": (
-                "Search for POTA parks by state or name. Use state codes like "
-                "'US-CO' for Colorado, 'US-CA' for California."
+                "Parks on the Air (POTA) information. "
+                "Actions: spots (current activator spots), search_parks (find parks by state/name), "
+                "nearby_parks (parks near a grid square), plan_activation (activation plan for a park)."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["spots", "search_parks", "nearby_parks", "plan_activation"],
+                        "description": "The action to perform.",
+                    },
                     "state": {
                         "type": "string",
-                        "description": "State code (e.g. 'US-CO', 'US-CA').",
+                        "description": "State code e.g. 'US-CO' (for search_parks).",
                     },
                     "name": {
                         "type": "string",
-                        "description": "Search by park name (substring match).",
+                        "description": "Park name search (for search_parks).",
                     },
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "pota_nearby_parks",
-            "description": (
-                "Find POTA parks near a grid square. Defaults to home grid DN70 "
-                "if no grid provided."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
                     "grid": {
                         "type": "string",
-                        "description": "4-character Maidenhead grid (e.g. 'DN70'). Defaults to home grid.",
+                        "description": "Grid square e.g. 'DN70' (for nearby_parks, default home grid).",
                     },
                     "radius": {
                         "type": "number",
-                        "description": "Search radius in miles (default 50, max 500).",
+                        "description": "Search radius in miles (for nearby_parks, default 50).",
                     },
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "pota_plan_activation",
-            "description": (
-                "Get a complete POTA activation plan for a park — recommended bands, "
-                "frequencies, best times, and tips. Park references use format "
-                "like 'US-1228'."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
                     "reference": {
                         "type": "string",
-                        "description": "Park reference (e.g. 'US-1228', 'US-0042').",
+                        "description": "Park reference e.g. 'US-1228' (for plan_activation).",
                     },
                 },
-                "required": ["reference"],
+                "required": ["action"],
             },
         },
     },
     # ==================================================================
-    # Contest tools
+    # Contests
     # ==================================================================
     {
         "type": "function",
         "function": {
-            "name": "contest_upcoming",
+            "name": "contest",
             "description": (
-                "Get upcoming ham radio contests. Shows contest name, dates, "
-                "bands, modes, and exchange info."
+                "Ham radio contest information. "
+                "Actions: upcoming (list upcoming contests), "
+                "recommend_band (band change recommendation during contest), "
+                "dashboard (live contest scoring dashboard)."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["upcoming", "recommend_band", "dashboard"],
+                        "description": "The action to perform.",
+                    },
                     "days": {
                         "type": "integer",
-                        "description": "How many days ahead to look (default 30, max 365).",
+                        "description": "Days ahead to look (for upcoming, default 30).",
                     },
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "contest_recommend_band",
-            "description": (
-                "Get a band change recommendation during a contest based on "
-                "current propagation and activity."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
                     "current_band": {
                         "type": "string",
-                        "description": "Band you're currently on (e.g. '20m', '40m').",
+                        "description": "Current band (for recommend_band).",
                     },
                     "contest": {
                         "type": "string",
-                        "description": "Optional contest name for context.",
+                        "description": "Contest name/slug (for recommend_band, dashboard).",
                     },
                 },
-                "required": ["current_band"],
+                "required": ["action"],
             },
         },
     },
+    # ==================================================================
+    # System Health
+    # ==================================================================
     {
         "type": "function",
         "function": {
-            "name": "contest_dashboard",
+            "name": "system",
             "description": (
-                "Get the live contest dashboard showing QSO rates, multipliers, "
-                "and estimated score for an active contest."
+                "System health and monitoring. "
+                "Actions: status (overall health + monitored nodes), "
+                "scheduler (scheduled jobs and next fire times)."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "contest": {
+                    "action": {
                         "type": "string",
-                        "description": "Contest name/slug (e.g. 'cq-ww-ssb', 'arrl-sweepstakes').",
+                        "enum": ["status", "scheduler"],
+                        "description": "The action to perform.",
                     },
                 },
-                "required": ["contest"],
+                "required": ["action"],
             },
         },
     },
     # ==================================================================
-    # System health tools
+    # Agents
     # ==================================================================
     {
         "type": "function",
         "function": {
-            "name": "system_status",
+            "name": "agent",
             "description": (
-                "Get the overall system health status including Core uptime "
-                "and status of all monitored nodes (ShackPi, WeatherPi, Worker, etc.)."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "system_scheduler",
-            "description": (
-                "Get the status of all scheduled tasks/jobs and their next fire times."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-        },
-    },
-    # ==================================================================
-    # Agent tools
-    # ==================================================================
-    {
-        "type": "function",
-        "function": {
-            "name": "agent_list",
-            "description": (
-                "List all configured AI agents with their names, descriptions, "
-                "triggers, and enabled status."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "agent_trigger",
-            "description": (
-                "Manually trigger an AI agent to run. Use when user says "
-                "'run the daily briefing agent' or 'trigger the DX spotter'."
+                "Manage AI agents. "
+                "Actions: list (all agents with triggers/status), "
+                "trigger (manually run an agent), "
+                "recent_runs (execution history)."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["list", "trigger", "recent_runs"],
+                        "description": "The action to perform.",
+                    },
                     "name": {
                         "type": "string",
-                        "description": "Agent name (e.g. 'daily-briefing', 'dx-spotter').",
+                        "description": "Agent name (for trigger, e.g. 'daily-briefing').",
                     },
-                },
-                "required": ["name"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "agent_recent_runs",
-            "description": (
-                "Get recent agent execution history showing which agents ran, "
-                "when, their status (success/failed), and duration."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
                     "limit": {
                         "type": "integer",
-                        "description": "Max runs to return (default 20, max 100).",
+                        "description": "Max runs to return (for recent_runs, default 20).",
                     },
                 },
-                "required": [],
+                "required": ["action"],
             },
         },
     },
@@ -784,40 +388,47 @@ CHAT_TOOLS: list[dict[str, Any]] = [
 # Tool executor
 # ---------------------------------------------------------------------------
 
+def _normalize_call(name: str, arguments: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
+    """Normalize old-format 'allstar_status' calls to grouped format.
+
+    Returns (group, action, arguments).
+    """
+    # Already in grouped format — action is in arguments
+    if name in ("allstar", "log", "propagation", "dx", "pota", "contest", "system", "agent"):
+        action = str(arguments.get("action", ""))
+        return name, action, arguments
+
+    # Backward-compat: old "prefix_action" format
+    for prefix in ("allstar", "propagation", "contest", "system", "agent", "pota", "log", "dx"):
+        if name.startswith(prefix + "_"):
+            action = name[len(prefix) + 1:]
+            arguments.setdefault("action", action)
+            return prefix, action, arguments
+
+    return name, "", arguments
+
+
 async def execute_tool(name: str, arguments: dict[str, Any]) -> str:
     """Execute a chat tool by name and return the result as a JSON string."""
     try:
-        # -- AllStar tools -------------------------------------------------
-        if name.startswith("allstar_"):
-            return await _execute_allstar(name, arguments)
+        group, action, arguments = _normalize_call(name, arguments)
 
-        # -- Log / QSO tools -----------------------------------------------
-        if name.startswith("log_"):
-            return await _execute_log(name, arguments)
-
-        # -- Propagation tools ---------------------------------------------
-        if name.startswith("propagation_"):
-            return await _execute_propagation(name, arguments)
-
-        # -- DX cluster tools ----------------------------------------------
-        if name.startswith("dx_"):
-            return await _execute_dx(name, arguments)
-
-        # -- POTA tools ----------------------------------------------------
-        if name.startswith("pota_"):
-            return await _execute_pota(name, arguments)
-
-        # -- Contest tools -------------------------------------------------
-        if name.startswith("contest_"):
-            return await _execute_contest(name, arguments)
-
-        # -- System health tools -------------------------------------------
-        if name.startswith("system_"):
-            return await _execute_system(name, arguments)
-
-        # -- Agent tools ---------------------------------------------------
-        if name.startswith("agent_"):
-            return await _execute_agent(name, arguments)
+        if group == "allstar":
+            return await _execute_allstar(action, arguments)
+        if group == "log":
+            return await _execute_log(action, arguments)
+        if group == "propagation":
+            return await _execute_propagation(action, arguments)
+        if group == "dx":
+            return await _execute_dx(action, arguments)
+        if group == "pota":
+            return await _execute_pota(action, arguments)
+        if group == "contest":
+            return await _execute_contest(action, arguments)
+        if group == "system":
+            return await _execute_system(action, arguments)
+        if group == "agent":
+            return await _execute_agent(action, arguments)
 
         return json.dumps({"error": f"Unknown tool: {name}"})
 
@@ -830,26 +441,26 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> str:
 # AllStar executor
 # ---------------------------------------------------------------------------
 
-async def _execute_allstar(name: str, arguments: dict[str, Any]) -> str:
+async def _execute_allstar(action: str, arguments: dict[str, Any]) -> str:
     from .allstar import get_service
 
     svc = get_service()
 
-    if name == "allstar_status":
+    if action == "status":
         status = await svc.get_status()
         return json.dumps(asdict(status), default=str)
 
-    elif name == "allstar_connect":
+    if action == "connect":
         node = int(arguments["node"])
         result = await svc.connect_node(node)
         return json.dumps(result)
 
-    elif name == "allstar_disconnect":
+    if action == "disconnect":
         node = int(arguments["node"])
         result = await svc.disconnect_node(node)
         return json.dumps(result)
 
-    elif name == "allstar_disconnect_all":
+    if action == "disconnect_all":
         connections = await svc.get_connections()
         if not connections:
             return json.dumps({"status": "ok", "message": "No nodes connected."})
@@ -859,23 +470,23 @@ async def _execute_allstar(name: str, arguments: dict[str, Any]) -> str:
             results.append({"node": conn.node, **r})
         return json.dumps({"status": "ok", "disconnected": results})
 
-    elif name == "allstar_monitor":
+    if action == "monitor":
         node = int(arguments["node"])
         result = await svc.monitor_node(node)
         return json.dumps(result)
 
-    elif name == "allstar_lookup":
+    if action == "lookup":
         node = int(arguments["node"])
         info = await svc.get_node_info(node)
         if info is None:
             return json.dumps({"error": f"Node {node} not found in directory."})
         return json.dumps(asdict(info))
 
-    elif name == "allstar_find_active":
+    if action == "find_active":
         nodes = await svc.get_keyed_nodes()
         return json.dumps({"keyed_nodes": nodes, "count": len(nodes)})
 
-    elif name == "allstar_search_nodes":
+    if action == "search_nodes":
         query = str(arguments.get("query", ""))
         results = await svc.search_nodes(query)
         return json.dumps({
@@ -884,7 +495,7 @@ async def _execute_allstar(name: str, arguments: dict[str, Any]) -> str:
             "query": query,
         })
 
-    elif name == "allstar_connect_active":
+    if action == "connect_active":
         import random
         nodes = await svc.get_keyed_nodes()
         if not nodes:
@@ -897,7 +508,7 @@ async def _execute_allstar(name: str, arguments: dict[str, Any]) -> str:
             "connect_result": result,
         })
 
-    elif name == "allstar_search_and_connect":
+    if action == "search_and_connect":
         query = str(arguments.get("query", ""))
         filt = str(arguments.get("filter", "")).lower()
         results = await svc.search_nodes(query)
@@ -924,20 +535,20 @@ async def _execute_allstar(name: str, arguments: dict[str, Any]) -> str:
             "total_matches": len(results),
         })
 
-    return json.dumps({"error": f"Unknown allstar tool: {name}"})
+    return json.dumps({"error": f"Unknown allstar action: {action}"})
 
 
 # ---------------------------------------------------------------------------
 # Log executor
 # ---------------------------------------------------------------------------
 
-async def _execute_log(name: str, arguments: dict[str, Any]) -> str:
-    if name == "log_recent_qsos":
+async def _execute_log(action: str, arguments: dict[str, Any]) -> str:
+    if action == "recent_qsos":
         limit = min(int(arguments.get("limit", 20)), 100)
         data = await _log_proxy("/recent", {"limit": limit})
         return json.dumps(data, default=str)
 
-    elif name == "log_search_qsos":
+    if action == "search_qsos":
         params: dict[str, Any] = {}
         for key in ("call", "band", "mode", "country", "since", "until"):
             val = arguments.get(key)
@@ -947,44 +558,44 @@ async def _execute_log(name: str, arguments: dict[str, Any]) -> str:
         data = await _log_proxy("/qsos", params)
         return json.dumps(data, default=str)
 
-    elif name == "log_stats":
+    if action == "stats":
         data = await _log_proxy("/stats")
         return json.dumps(data, default=str)
 
-    elif name == "log_dxcc":
+    if action == "dxcc":
         data = await _log_proxy("/dxcc")
         return json.dumps(data, default=str)
 
-    return json.dumps({"error": f"Unknown log tool: {name}"})
+    return json.dumps({"error": f"Unknown log action: {action}"})
 
 
 # ---------------------------------------------------------------------------
 # Propagation executor
 # ---------------------------------------------------------------------------
 
-async def _execute_propagation(name: str, arguments: dict[str, Any]) -> str:
-    if name == "propagation_conditions":
+async def _execute_propagation(action: str, arguments: dict[str, Any]) -> str:
+    if action == "conditions":
         data = await _core_proxy("/propagation")
         return json.dumps(data, default=str)
 
-    elif name == "propagation_band_detail":
+    if action == "band_detail":
         band = str(arguments.get("band", "20m"))
         data = await _core_proxy(f"/propagation/band/{band}")
         return json.dumps(data, default=str)
 
-    elif name == "propagation_forecast":
+    if action == "forecast":
         data = await _core_proxy("/propagation/forecast")
         return json.dumps(data, default=str)
 
-    return json.dumps({"error": f"Unknown propagation tool: {name}"})
+    return json.dumps({"error": f"Unknown propagation action: {action}"})
 
 
 # ---------------------------------------------------------------------------
 # DX cluster executor
 # ---------------------------------------------------------------------------
 
-async def _execute_dx(name: str, arguments: dict[str, Any]) -> str:
-    if name == "dx_spots":
+async def _execute_dx(action: str, arguments: dict[str, Any]) -> str:
+    if action == "spots":
         params: dict[str, Any] = {}
         for key in ("band", "mode", "entity"):
             val = arguments.get(key)
@@ -994,16 +605,16 @@ async def _execute_dx(name: str, arguments: dict[str, Any]) -> str:
         data = await _core_proxy("/dx/spots", params=params)
         return json.dumps(data, default=str)
 
-    elif name == "dx_spots_summary":
+    if action == "spots_summary":
         data = await _core_proxy("/dx/spots/summary")
         return json.dumps(data, default=str)
 
-    elif name == "dx_lookup_entity":
+    if action == "lookup_entity":
         callsign = str(arguments.get("callsign", "")).upper()
         data = await _core_proxy(f"/dx/entities/{callsign}")
         return json.dumps(data, default=str)
 
-    elif name == "dx_get_needs":
+    if action == "get_needs":
         params = {}
         entity = arguments.get("entity")
         if entity:
@@ -1011,7 +622,7 @@ async def _execute_dx(name: str, arguments: dict[str, Any]) -> str:
         data = await _core_proxy("/dx/needs", params=params)
         return json.dumps(data, default=str)
 
-    elif name == "dx_add_need":
+    if action == "add_need":
         body: dict[str, Any] = {"entity": str(arguments["entity"])}
         for key in ("band", "mode"):
             val = arguments.get(key)
@@ -1022,24 +633,24 @@ async def _execute_dx(name: str, arguments: dict[str, Any]) -> str:
         data = await _core_proxy("/dx/needs", method="POST", json_body=body)
         return json.dumps(data, default=str)
 
-    elif name == "dx_remove_need":
+    if action == "remove_need":
         need_id = int(arguments["need_id"])
         data = await _core_proxy(f"/dx/needs/{need_id}", method="DELETE")
         return json.dumps(data, default=str)
 
-    return json.dumps({"error": f"Unknown dx tool: {name}"})
+    return json.dumps({"error": f"Unknown dx action: {action}"})
 
 
 # ---------------------------------------------------------------------------
 # POTA executor
 # ---------------------------------------------------------------------------
 
-async def _execute_pota(name: str, arguments: dict[str, Any]) -> str:
-    if name == "pota_spots":
+async def _execute_pota(action: str, arguments: dict[str, Any]) -> str:
+    if action == "spots":
         data = await _core_proxy("/pota/spots")
         return json.dumps(data, default=str)
 
-    elif name == "pota_search_parks":
+    if action == "search_parks":
         params: dict[str, Any] = {}
         if arguments.get("state"):
             params["state"] = arguments["state"]
@@ -1048,7 +659,7 @@ async def _execute_pota(name: str, arguments: dict[str, Any]) -> str:
         data = await _core_proxy("/pota/parks/search", params=params)
         return json.dumps(data, default=str)
 
-    elif name == "pota_nearby_parks":
+    if action == "nearby_parks":
         params: dict[str, Any] = {}
         if arguments.get("grid"):
             params["grid"] = arguments["grid"]
@@ -1057,27 +668,27 @@ async def _execute_pota(name: str, arguments: dict[str, Any]) -> str:
         data = await _core_proxy("/pota/parks/nearby", params=params)
         return json.dumps(data, default=str)
 
-    elif name == "pota_plan_activation":
+    if action == "plan_activation":
         ref = str(arguments.get("reference", ""))
         data = await _core_proxy(f"/pota/plan/{ref}")
         return json.dumps(data, default=str)
 
-    return json.dumps({"error": f"Unknown pota tool: {name}"})
+    return json.dumps({"error": f"Unknown pota action: {action}"})
 
 
 # ---------------------------------------------------------------------------
 # Contest executor
 # ---------------------------------------------------------------------------
 
-async def _execute_contest(name: str, arguments: dict[str, Any]) -> str:
-    if name == "contest_upcoming":
+async def _execute_contest(action: str, arguments: dict[str, Any]) -> str:
+    if action == "upcoming":
         params: dict[str, Any] = {}
         if "days" in arguments:
             params["days"] = str(min(int(arguments["days"]), 365))
         data = await _core_proxy("/contest/upcoming", params=params)
         return json.dumps(data, default=str)
 
-    elif name == "contest_recommend_band":
+    if action == "recommend_band":
         params: dict[str, Any] = {
             "current_band": str(arguments["current_band"]),
         }
@@ -1086,20 +697,20 @@ async def _execute_contest(name: str, arguments: dict[str, Any]) -> str:
         data = await _core_proxy("/contest/recommend-band", params=params)
         return json.dumps(data, default=str)
 
-    elif name == "contest_dashboard":
+    if action == "dashboard":
         contest = str(arguments.get("contest", ""))
         data = await _core_proxy(f"/contest/{contest}/dashboard")
         return json.dumps(data, default=str)
 
-    return json.dumps({"error": f"Unknown contest tool: {name}"})
+    return json.dumps({"error": f"Unknown contest action: {action}"})
 
 
 # ---------------------------------------------------------------------------
 # System health executor
 # ---------------------------------------------------------------------------
 
-async def _execute_system(name: str, arguments: dict[str, Any]) -> str:
-    if name == "system_status":
+async def _execute_system(action: str, arguments: dict[str, Any]) -> str:
+    if action == "status":
         health = await _core_proxy("/health")
         nodes = await _core_proxy("/health/nodes")
         return json.dumps({
@@ -1107,21 +718,20 @@ async def _execute_system(name: str, arguments: dict[str, Any]) -> str:
             "nodes": nodes.get("nodes", []),
         }, default=str)
 
-    elif name == "system_scheduler":
+    if action == "scheduler":
         data = await _core_proxy("/health/scheduler")
         return json.dumps(data, default=str)
 
-    return json.dumps({"error": f"Unknown system tool: {name}"})
+    return json.dumps({"error": f"Unknown system action: {action}"})
 
 
 # ---------------------------------------------------------------------------
 # Agent executor
 # ---------------------------------------------------------------------------
 
-async def _execute_agent(name: str, arguments: dict[str, Any]) -> str:
-    if name == "agent_list":
+async def _execute_agent(action: str, arguments: dict[str, Any]) -> str:
+    if action == "list":
         data = await _core_proxy("/agents")
-        # Trim to essential fields for the LLM
         summary = []
         for a in data:
             summary.append({
@@ -1136,7 +746,7 @@ async def _execute_agent(name: str, arguments: dict[str, Any]) -> str:
             })
         return json.dumps(summary, default=str)
 
-    elif name == "agent_trigger":
+    if action == "trigger":
         agent_name = str(arguments["name"])
         data = await _core_proxy(
             f"/agents/{agent_name}/run",
@@ -1145,9 +755,9 @@ async def _execute_agent(name: str, arguments: dict[str, Any]) -> str:
         )
         return json.dumps(data, default=str)
 
-    elif name == "agent_recent_runs":
+    if action == "recent_runs":
         limit = min(int(arguments.get("limit", 20)), 100)
         data = await _core_proxy("/agents/runs", params={"limit": str(limit)})
         return json.dumps(data, default=str)
 
-    return json.dumps({"error": f"Unknown agent tool: {name}"})
+    return json.dumps({"error": f"Unknown agent action: {action}"})

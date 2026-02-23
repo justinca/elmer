@@ -100,6 +100,62 @@ export const sendChat = (data: {
   model?: string
   web_search?: string
 }) => api.post("/chat", data, { timeout: 120000 })
+
+export interface StreamChatCallbacks {
+  onSources?: (data: { sources_used: unknown[]; web_sources: unknown[] }) => void
+  onToken?: (text: string) => void
+  onDone?: (data: { conversation_id: number; model: string }) => void
+  onError?: (error: string) => void
+}
+
+export async function streamChat(
+  data: { message: string; conversation_id?: number | null; model?: string; web_search?: string },
+  callbacks: StreamChatCallbacks,
+): Promise<void> {
+  const resp = await fetch("/api/chat/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+
+  if (!resp.ok || !resp.body) {
+    callbacks.onError?.(`HTTP ${resp.status}`)
+    return
+  }
+
+  const reader = resp.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split("\n")
+    // Keep the last potentially incomplete line in the buffer
+    buffer = lines.pop() || ""
+
+    let currentEvent = ""
+    for (const line of lines) {
+      if (line.startsWith("event: ")) {
+        currentEvent = line.slice(7).trim()
+      } else if (line.startsWith("data: ")) {
+        const raw = line.slice(6)
+        try {
+          const parsed = JSON.parse(raw)
+          if (currentEvent === "sources") callbacks.onSources?.(parsed)
+          else if (currentEvent === "token") callbacks.onToken?.(parsed.t)
+          else if (currentEvent === "done") callbacks.onDone?.(parsed)
+          else if (currentEvent === "error") callbacks.onError?.(parsed.error)
+        } catch {
+          // skip malformed JSON
+        }
+        currentEvent = ""
+      }
+    }
+  }
+}
 export const getConversations = (limit = 30) =>
   api.get("/chat/conversations", { params: { limit } })
 export const getConversation = (id: number) =>
