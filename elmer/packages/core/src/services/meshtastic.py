@@ -89,6 +89,13 @@ class MeshtasticService:
         if not isinstance(payload, dict):
             return
 
+        # Filter: only respond to messages on our channel (CalvertCasa).
+        # Meshtastic nodes with MQTT uplink publish ALL received messages
+        # (including LongFast) under the uplink topic.
+        msg_channel = payload.get("channel")
+        if msg_channel is not None and int(msg_channel) != settings.MESHTASTIC_CHANNEL:
+            return
+
         # Filter: skip non-text messages.
         msg_type = payload.get("type", "")
         if msg_type != "text":
